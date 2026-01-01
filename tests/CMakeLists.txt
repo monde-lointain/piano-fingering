@@ -19,6 +19,7 @@ add_executable(domain_test
   domain/hand_test.cpp
   domain/finger_test.cpp
   domain/pitch_test.cpp
+  domain/note_test.cpp
 )
 target_include_directories(domain_test
   PRIVATE ${CMAKE_SOURCE_DIR}/include
