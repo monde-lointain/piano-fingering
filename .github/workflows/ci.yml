@@ -61,11 +61,14 @@ jobs:
           git clone --depth 1 https://github.com/danmar/cppcheck.git ~/cppcheck-src
           cd ~/cppcheck-src
           make MATCHCOMPILER=yes FILESDIR=/usr/share/cppcheck HAVE_RULES=yes -j$(nproc)
-          mkdir -p ~/cppcheck/bin
+          mkdir -p ~/cppcheck/bin ~/cppcheck/cfg
           cp cppcheck ~/cppcheck/bin/
+          cp -r cfg/* ~/cppcheck/cfg/
 
       - name: Install cppcheck
         run: |
+          sudo mkdir -p /usr/share/cppcheck
+          sudo cp -r ~/cppcheck/cfg /usr/share/cppcheck/
           sudo cp ~/cppcheck/bin/cppcheck /usr/local/bin/
           sudo chmod +x /usr/local/bin/cppcheck
 
