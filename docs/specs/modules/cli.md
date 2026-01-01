@@ -172,7 +172,7 @@ TEST(CLITest, ParseMutexFlagsThrows) {
 
 | Test Case | Scenario | Verification |
 |-----------|----------|--------------|
-| `GoldenPipeline` | Full run on C-major scale | Exit code 0, output file exists, parseable MusicXML |
+| `GoldenPipeline` | Full run on Czerny Op. 821 No. 1 | Exit code 0, output file exists, parseable MusicXML |
 | `InvalidInputFile` | Non-existent file | Exit code 2, stderr contains "Cannot open input file" |
 | `MalformedXML` | Corrupted MusicXML | Exit code 3, stderr contains "Invalid MusicXML" |
 | `InvalidConfig` | MinPrac > MinComf | Exit code 4, stderr contains "Configuration Error" |

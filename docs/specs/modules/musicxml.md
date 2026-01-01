@@ -401,7 +401,7 @@ TEST(MusicXMLTest, WriteRoundTrip) {
 
 | Test Case | Scenario | Verification |
 |-----------|----------|--------------|
-| `GoldenSetParsing` | Parse all 10 Golden Set pieces | No exceptions, note counts match expected |
+| `GoldenSetParsing` | Parse all 8 Golden Set pieces | No exceptions, note counts match expected |
 | `MuseScoreImport` | Write fingered XML, import to MuseScore | Fingerings visible, no errors |
 | `FinaleImport` | Write fingered XML, import to Finale | Fingerings visible, no errors |
 | `SibeliusImport` | Write fingered XML, import to Sibelius | Fingerings visible, no errors |
@@ -511,7 +511,7 @@ src/musicxml/
 
 ## Success Criteria
 
-- ✅ Parse all 10 Golden Set pieces without crashes
+- ✅ Parse all 8 Golden Set pieces without crashes
 - ✅ Round-trip (parse → write → parse) preserves all elements
 - ✅ Fingering annotations importable to MuseScore, Finale, Sibelius
 - ✅ Malformed XML reports line number in error message

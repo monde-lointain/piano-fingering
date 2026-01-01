@@ -81,7 +81,7 @@
 **Design Impact**:
 - Strong typing (`enum class Hand`, `Finger`, `Pitch`)
 - Validation layer in config module (MinPrac < MinComf < MinRel < MaxRel < MaxComf < MaxPrac)
-- Golden Set regression tests (10 pieces with baseline Z-scores)
+- Golden Set regression tests (8 pieces with baseline Z-scores)
 - Hard constraint check: no duplicate fingers in same chord
 
 **Testing**: Google Test unit tests (80% coverage); integration tests on Golden Set
@@ -195,7 +195,7 @@ Legend:
 
 ## Success Criteria
 
-1. ✅ Process Golden Set (10 pieces) without crashes
+1. ✅ Process Golden Set (8 pieces) without crashes
 2. ✅ <2s for 500 notes, <5s for 2000 notes (balanced mode)
 3. ✅ Output importable to MuseScore, Finale, Sibelius
 4. ✅ 100% hard constraint compliance (no duplicate fingers in chords)

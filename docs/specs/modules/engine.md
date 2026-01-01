@@ -160,41 +160,40 @@ private:
 
 ### Rule Implementation Examples
 
-**Rule 1**: Distance below MinComf or above MaxComf (+2 per unit)
+**Rules 1, 2, 13 Combined (Cascading Penalties)**
+
+IMPORTANT: These rules use cascading (cumulative) penalties, not independent checks:
 
 ```cpp
-float CostEvaluator::ApplyRule1(int distance, Finger f1, Finger f2) const {
+float CostEvaluator::ApplyRules_1_2_13(int distance, Finger f1, Finger f2) const {
     const auto& bounds = config_.GetDistanceMatrix().Get(f1, f2);
 
     float penalty = 0.0f;
-    if (distance < bounds.MinComf) {
-        penalty += (bounds.MinComf - distance) * 2.0f;
-    } else if (distance > bounds.MaxComf) {
-        penalty += (distance - bounds.MaxComf) * 2.0f;
+
+    // Cascading checks: penalties accumulate for increasingly severe violations
+    if (distance < bounds.MinRel) {
+        penalty += (bounds.MinRel - distance);  // Rule 2: +1 per unit
+        if (distance < bounds.MinComf) {
+            penalty += 2.0f * (bounds.MinComf - distance);  // Rule 1: +2 per unit ADDITIONAL
+            if (distance < bounds.MinPrac) {
+                penalty += 10.0f * (bounds.MinPrac - distance);  // Rule 13: +10 per unit ADDITIONAL
+            }
+        }
+    } else if (distance > bounds.MaxRel) {
+        penalty += (distance - bounds.MaxRel);  // Rule 2: +1 per unit
+        if (distance > bounds.MaxComf) {
+            penalty += 2.0f * (distance - bounds.MaxComf);  // Rule 1: +2 per unit ADDITIONAL
+            if (distance > bounds.MaxPrac) {
+                penalty += 10.0f * (distance - bounds.MaxPrac);  // Rule 13: +10 per unit ADDITIONAL
+            }
+        }
     }
 
-    return penalty * config_.GetRuleWeights().weights[0];  // Rule 1 weight
+    return penalty;  // Total: 1 + 2 + 10 = 13 per unit for severe violations
 }
 ```
 
-**Rule 13**: Distance below MinPrac or above MaxPrac (+10 per unit)
-
-```cpp
-float CostEvaluator::ApplyRule13(int distance, Finger f1, Finger f2) const {
-    const auto& bounds = config_.GetDistanceMatrix().Get(f1, f2);
-
-    float penalty = 0.0f;
-    if (distance < bounds.MinPrac) {
-        penalty += (bounds.MinPrac - distance) * 10.0f;
-    } else if (distance > bounds.MaxPrac) {
-        penalty += (distance - bounds.MaxPrac) * 10.0f;
-    }
-
-    return penalty * config_.GetRuleWeights().weights[12];  // Rule 13 weight
-}
-```
-
-**Rule 14**: Apply rules 1, 2, 13 within chord (doubled scores)
+**Rule 14**: Apply rules 1, 2, 13 within chord (doubled scores, cascading)
 
 ```cpp
 float CostEvaluator::ComputeIntraSliceCost(const State& state, const Slice& slice) const {
@@ -208,10 +207,29 @@ float CostEvaluator::ComputeIntraSliceCost(const State& state, const Slice& slic
             Finger f1 = state.fingers[i];
             Finger f2 = state.fingers[j];
 
-            // Apply rules with doubled penalties
-            total_cost += 2.0f * ApplyRule1(distance, f1, f2);
-            total_cost += 2.0f * ApplyRule2(distance, f1, f2);
-            total_cost += ApplyRule13(distance, f1, f2);  // Not doubled
+            const auto& bounds = config_.GetDistanceMatrix().Get(f1, f2);
+            float penalty = 0.0f;
+
+            // Cascading penalties with doubled weights for Rules 1 & 2
+            if (distance < bounds.MinRel) {
+                penalty += 2.0f * (bounds.MinRel - distance);  // Rule 2 doubled: +2 per unit
+                if (distance < bounds.MinComf) {
+                    penalty += 4.0f * (bounds.MinComf - distance);  // Rule 1 doubled: +4 per unit
+                    if (distance < bounds.MinPrac) {
+                        penalty += 10.0f * (bounds.MinPrac - distance);  // Rule 13: +10 per unit
+                    }
+                }
+            } else if (distance > bounds.MaxRel) {
+                penalty += 2.0f * (distance - bounds.MaxRel);  // Rule 2 doubled: +2 per unit
+                if (distance > bounds.MaxComf) {
+                    penalty += 4.0f * (distance - bounds.MaxComf);  // Rule 1 doubled: +4 per unit
+                    if (distance > bounds.MaxPrac) {
+                        penalty += 10.0f * (distance - bounds.MaxPrac);  // Rule 13: +10 per unit
+                    }
+                }
+            }
+
+            total_cost += penalty;  // Total: 2 + 4 + 10 = 16 per unit for severe chord violations
         }
     }
 
@@ -557,7 +575,7 @@ Solution Optimize(const Piece& piece,
 | `CMajorScale_FastMode` | Greedy DP only | Valid solution, <0.5s |
 | `CMajorScale_BalancedMode` | DP + 1000 ILS | Better Z-score than Fast, <2s |
 | `CMajorScale_QualityMode` | DP + 5000 ILS | Best Z-score, <5s |
-| `GoldenSet_AllModes` | All 10 pieces × 3 modes | 100% success, no crashes |
+| `GoldenSet_AllModes` | All 8 pieces × 3 modes | 100% success, no crashes |
 | `HardConstraint_NeverViolated` | 1000 random pieces | 0 duplicate-finger violations |
 | `Determinism` | Seed=12345, 10 runs | Identical Z-scores |
 | `ProgressReporting` | 100-measure piece | Progress updates ≤1s apart |

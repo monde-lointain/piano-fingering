@@ -232,8 +232,8 @@ constexpr FingerPairDistance kLargePreset[10] = {
 ```cpp
 constexpr RuleWeights kDefaultWeights = {
     .weights = {
-        2.0f,   // Rule 1: Below MinComf or above MaxComf
-        1.0f,   // Rule 2: Below MinRel or above MaxRel
+        2.0f,   // Rule 1: Below MinComf or above MaxComf (cascades with 2, 13)
+        1.0f,   // Rule 2: Below MinRel or above MaxRel (cascades with 1, 13)
         1.0f,   // Rule 3: Hand position change (triplet)
         1.0f,   // Rule 4: Distance exceeds comfort (triplet)
         1.0f,   // Rule 5: Fourth finger usage
@@ -244,12 +244,14 @@ constexpr RuleWeights kDefaultWeights = {
         1.0f,   // Rule 10: Thumb crossing (same level)
         2.0f,   // Rule 11: Thumb on black crossed by finger on white
         1.0f,   // Rule 12: Same finger reuse with position change
-        10.0f,  // Rule 13: Below MinPrac or above MaxPrac
-        1.0f,   // Rule 14: Rules 1, 2, 13 within chord (doubled)
+        10.0f,  // Rule 13: Below MinPrac or above MaxPrac (cascades with 1, 2)
+        1.0f,   // Rule 14: Rules 1, 2, 13 within chord (doubled, cascading)
         1.0f    // Rule 15: Same pitch, different finger
     }
 };
 ```
+
+**Note:** Rules 1, 2, and 13 use cascading penalties. The weights above are applied to the base penalty values, which accumulate cumulatively when multiple thresholds are violated (e.g., MinPrac violation triggers all three rules for a total of +1 + +2 + +10 = +13 per unit).
 
 ---
 

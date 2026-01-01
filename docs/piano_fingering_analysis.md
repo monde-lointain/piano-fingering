@@ -41,17 +41,19 @@ Where:
 
 | Rule | Type | Description | Penalty |
 |------|------|-------------|---------|
-| 1 | Comfort | Distance below MinComf or above MaxComf | +2/unit |
-| 2 | Relaxed | Distance below MinRel or above MaxRel | +1/unit |
+| 1 | Comfort | Distance below MinComf or above MaxComf* | +2/unit |
+| 2 | Relaxed | Distance below MinRel or above MaxRel* | +1/unit |
 | 3-4 | Triplet | Hand position changes over three notes | +1 to +3 |
 | 5 | Finger | Fourth finger usage | +1 |
 | 6-7 | Finger | 3-4 finger combinations | +1 |
 | 8-9 | Black key | Thumb/fifth on black keys | +0.5 to +2 |
 | 10-11 | Crossing | Thumb crossings | +1 to +2 |
 | 12 | Repetition | Same finger reuse with position change | +1 |
-| 13 | Practical | Distance below MinPrac or above MaxPrac | +10/unit |
-| 14 | Chord | Rules 1, 2, 13 within chord (doubled) | Varies |
+| 13 | Practical | Distance below MinPrac or above MaxPrac* | +10/unit |
+| 14 | Chord | Rules 1, 2, 13 within chord (doubled)* | Varies |
 | 15 | Same pitch | Consecutive identical pitches, different finger | +1 |
+
+*Rules 1, 2, and 13 use **cascading (cumulative) penalties**: violations trigger nested checks, with penalties accumulating (e.g., MinPrac violation = +1 + +2 + +10 = +13/unit total). Within chords (Rule 14), the same cascading logic applies with Rules 1 & 2 doubled.
 
 ### 1.6 Hard Constraints
 

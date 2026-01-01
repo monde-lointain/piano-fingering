@@ -857,7 +857,7 @@ piano-fingering: Error: Parser: Invalid MusicXML at line 42: Unexpected closing 
 **MAINT-1.4:** The codebase shall pass static analysis via `clang-tidy` with the default check set.
 
 **MAINT-1.5:** The System shall include a comprehensive test suite covering:
-- 10 "Golden Set" pieces (provided by stakeholders)
+- 8 "Golden Set" pieces (provided by stakeholders)
 - Unit tests for each algorithmic component
 - Integration tests for end-to-end processing
 
@@ -922,8 +922,8 @@ piano-fingering: Error: Parser: Invalid MusicXML at line 42: Unexpected closing 
 
 | Rule ID | Description | Default Penalty |
 |---------|-------------|-----------------|
-| 1 | Distance below MinComf or above MaxComf | +2 per unit |
-| 2 | Distance below MinRel or above MaxRel | +1 per unit |
+| 1 | Distance below MinComf or above MaxComf (cascades) | +2 per unit (additional) |
+| 2 | Distance below MinRel or above MaxRel (cascades) | +1 per unit (base) |
 | 3 | Hand position change (triplet context) | +1 to +3 |
 | 4 | Distance exceeds comfort (triplet) | +1 per unit |
 | 5 | Fourth finger usage | +1 |
@@ -934,9 +934,11 @@ piano-fingering: Error: Parser: Invalid MusicXML at line 42: Unexpected closing 
 | 10 | Thumb crossing (same level) | +1 |
 | 11 | Thumb on black crossed by finger on white | +2 |
 | 12 | Same finger reuse with position change | +1 |
-| 13 | Distance below MinPrac or above MaxPrac | +10 per unit |
-| 14 | Rules 1, 2, 13 within chord (doubled) | Varies |
+| 13 | Distance below MinPrac or above MaxPrac (cascades) | +10 per unit (additional) |
+| 14 | Rules 1, 2, 13 within chord (doubled, cascading) | Varies |
 | 15 | Same pitch, different finger consecutively | +1 |
+
+**Note on Cascading Penalties (Rules 1, 2, 13):** These rules use cumulative penalties. When a distance violates MinRel/MaxRel, Rule 2 adds +1/unit. If it additionally violates MinComf/MaxComf, Rule 1 adds +2/unit more. If it also violates MinPrac/MaxPrac, Rule 13 adds +10/unit more, for a total of +13/unit for severe violations.
 
 ## A.3 Beam Search Parameters
 
@@ -959,18 +961,16 @@ piano-fingering: Error: Parser: Invalid MusicXML at line 42: Unexpected closing 
 
 ## B.1 Golden Set Test Cases
 
-The following 10 pieces comprise the "Golden Set" for regression testing:
+The following 8 pieces comprise the "Golden Set" for regression testing:
 
-1. **C Major Scale** (monophonic, 15 notes) - Baseline simplicity test
-2. **Hanon Exercise No. 1** (monophonic, 64 notes) - Repetitive pattern test
-3. **J.S. Bach - Invention No. 1 in C Major** (polyphonic, ~350 notes) - Baroque counterpoint
-4. **Beethoven - Für Elise** (excerpt, ~500 notes) - Romantic fingering challenges
-5. **Chopin - Prelude Op. 28 No. 4** (~200 notes) - Expressive legato passages
-6. **Burgmüller - Arabesque** (~400 notes) - Hand crossing patterns
-7. **Clementi - Sonatina Op. 36 No. 1, Mvt. 1** (~800 notes) - Classical period techniques
-8. **Debussy - Rêverie** (excerpt, ~300 notes) - Impressionist harmonies
-9. **Joplin - The Entertainer** (excerpt, ~600 notes) - Ragtime syncopation
-10. **Prokofiev - March Op. 65 No. 10** (~400 notes) - 20th-century challenges
+1. **Czerny - Etude Op. 821 No. 1** (monophonic, excerpt)
+2. **Czerny - Etude Op. 821 No. 37** (monophonic, excerpt)
+3. **Czerny - Etude Op. 821 No. 38** (monophonic, excerpt)
+4. **Czerny - Etude Op. 821 No. 54** (monophonic, excerpt)
+5. **Czerny - Etude Op. 821 No. 62** (monophonic, excerpt)
+6. **Czerny - Etude Op. 821 No. 66** (monophonic, excerpt)
+7. **Czerny - Etude Op. 821 No. 96** (monophonic, excerpt)
+8. **Scriabin - Etude Op. 2 No. 1** (polyphonic)
 
 ## B.2 Acceptance Test Procedures
 
@@ -1004,7 +1004,7 @@ The following 10 pieces comprise the "Golden Set" for regression testing:
 **Test ID: PERF-1**  
 **Objective:** Verify response time meets NFR-PERF-1.2.  
 **Procedure:**
-1. Select Golden Set piece with ~2000 notes (Clementi Sonatina)
+1. Select piece with ~2000 notes
 2. Execute 10 runs: `time piano-fingering --mode=balanced <piece>.musicxml`
 3. Calculate average wall-clock time
 
@@ -1040,7 +1040,7 @@ The following 10 pieces comprise the "Golden Set" for regression testing:
 **Test ID: QUAL-1**  
 **Objective:** Expert pianist review.  
 **Procedure:**
-1. Generate fingerings for all 10 Golden Set pieces
+1. Generate fingerings for all 8 Golden Set pieces
 2. Present to 3 expert pianists (blind evaluation)
 3. Collect ratings (1-5 scale) on playability
 
@@ -1054,15 +1054,15 @@ Store baseline difficulty scores (Z values) for Golden Set:
 
 | Piece | Baseline Z (Balanced Mode) |
 |-------|---------------------------|
-| C Major Scale | 5 |
-| Hanon No. 1 | 28 |
-| Bach Invention 1 | 142 |
-| Für Elise | 198 |
-| Chopin Prelude 4 | 85 |
-| Arabesque | 176 |
-| Clementi Sonatina | 312 |
-| Rêverie | 124 |
-| The Entertainer | 245 |
-| Prokofiev March | 189 |
+| Etude Op. 821 No. 1 | 22 |
+| Etude Op. 821 No. 37 | 55
+| Etude Op. 821 No. 38 | 45 |
+| Etude Op. 821 No. 54 | 56.5 |
+| Etude Op. 821 No. 62 | 324 |
+| Etude Op. 821 No. 66 | 104 |
+| Etude Op. 821 No. 96 | 726 |
+| Etude Op. 2 No. 1 | 4205.5 |
+
+
 
 **Regression Criterion:** New version Z scores must not exceed baseline by >5%
