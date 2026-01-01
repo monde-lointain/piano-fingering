@@ -1,0 +1,23 @@
+# Doxyfile.in - Doxygen configuration template
+
+PROJECT_NAME           = "@PROJECT_NAME@"
+PROJECT_NUMBER         = @PROJECT_VERSION@
+PROJECT_BRIEF          = "Piano Fingering Generator"
+OUTPUT_DIRECTORY       = @CMAKE_BINARY_DIR@/docs
+INPUT                  = @CMAKE_SOURCE_DIR@/src @CMAKE_SOURCE_DIR@/include @CMAKE_SOURCE_DIR@/docs
+RECURSIVE              = YES
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = YES
+EXTRACT_STATIC         = YES
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+HTML_OUTPUT            = html
+USE_MDFILE_AS_MAINPAGE = @CMAKE_SOURCE_DIR@/docs/SRS.md
+FILE_PATTERNS          = *.cpp *.h *.md
+EXCLUDE_PATTERNS       = */build/* */cmake-build-*/*
+GENERATE_TREEVIEW      = YES
+HAVE_DOT               = YES
+CALL_GRAPH             = YES
+CALLER_GRAPH           = YES
+DOT_IMAGE_FORMAT       = svg
+INTERACTIVE_SVG        = YES

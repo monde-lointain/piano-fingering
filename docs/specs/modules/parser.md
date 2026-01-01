@@ -281,10 +281,11 @@ TEST(ParserIntegrationTest, FileNotFoundThrows) {
 ## File Structure
 
 ```
-src/parser/
+include/parser/
   musicxml_parser.h      // Public API
-  musicxml_parser.cpp    // Implementation
   pitch_mapping.h        // Step+Alter → Modified Pitch conversion
+src/parser/
+  musicxml_parser.cpp    // Implementation
   pitch_mapping.cpp
 ```
 

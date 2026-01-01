@@ -310,12 +310,13 @@ TEST(EvaluatorIntegrationTest, MatchPythonScorerOnGoldenSet) {
 ## File Structure
 
 ```
-src/evaluator/
+include/evaluator/
   score_evaluator.h        // Public API
-  score_evaluator.cpp      // Orchestration + full evaluation
   rules.h                  // Individual rule functions
-  rules.cpp                // Rule implementations (15 functions)
   cascading_distance.h     // Rules 1, 2, 13 combined logic
+src/evaluator/
+  score_evaluator.cpp      // Orchestration + full evaluation
+  rules.cpp                // Rule implementations (15 functions)
   cascading_distance.cpp
 ```
 

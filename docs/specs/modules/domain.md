@@ -156,7 +156,7 @@ TEST(SliceTest, MaxNotesEnforced) {
 ## File Structure
 
 ```
-src/domain/
+include/domain/
   types.h           // Pitch, Finger, Hand enums + utility functions
   note.h            // Note, Slice, Measure classes
   piece.h           // Piece class + Metadata struct

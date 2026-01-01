@@ -208,8 +208,9 @@ TEST(GeneratorIntegrationTest, OverwriteProtectionThrows) {
 ## File Structure
 
 ```
-src/generator/
+include/generator/
   musicxml_generator.h       // Public API
+src/generator/
   musicxml_generator.cpp     // Implementation
 ```
 

@@ -244,11 +244,12 @@ TEST(ConfigTest, MalformedJSONThrows) {
 ## File Structure
 
 ```
-src/config/
+include/config/
   distance_matrix.h       // DistanceMatrix struct + accessors
   rule_weights.h          // RuleWeights typedef
   preset.h                // Preset struct + embedded constants
   config_manager.h        // Loading and validation logic
+src/config/
   config_manager.cpp      // JSON parsing implementation
   embedded_presets.cpp    // PRESET_SMALL/MEDIUM/LARGE definitions
 ```

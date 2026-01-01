@@ -257,16 +257,17 @@ TEST(OptimizerIntegrationTest, ProcessingTime500Notes) {
 ## File Structure
 
 ```
-src/optimizer/
+include/optimizer/
   optimizer.h              // Public API
-  optimizer.cpp            // Orchestration (beam + ILS)
   beam_search.h            // Phase 1 algorithm
-  beam_search.cpp
   ils.h                    // Phase 2 algorithm
-  ils.cpp
   thread_pool.h            // Worker queue
-  thread_pool.cpp
   state_generation.h       // Valid fingering generation
+src/optimizer/
+  optimizer.cpp            // Orchestration (beam + ILS)
+  beam_search.cpp
+  ils.cpp
+  thread_pool.cpp
   state_generation.cpp
 ```
 

@@ -239,13 +239,14 @@ TEST(CLIIntegrationTest, VersionFlagPrintsVersion) {
 ## File Structure
 
 ```
+include/cli/
+  args.h                     // Argument parsing
+  progress_observer.h        // IProgressObserver implementation
+  orchestrator.h             // Pipeline execution
 src/cli/
   main.cpp                   // Entry point
-  args.h                     // Argument parsing
   args.cpp
-  progress_observer.h        // IProgressObserver implementation
   progress_observer.cpp
-  orchestrator.h             // Pipeline execution
   orchestrator.cpp
 ```
 
