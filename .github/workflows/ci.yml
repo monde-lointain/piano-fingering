@@ -1,0 +1,156 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++-11
+
+      - name: Cache CMake build
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: ${{ runner.os }}-cmake-deps-${{ hashFiles('cmake/Dependencies.cmake') }}
+          restore-keys: |
+            ${{ runner.os }}-cmake-deps-
+
+      - name: Build
+        run: make build
+        env:
+          CXX: g++-11
+
+      - name: Run tests
+        run: make test
+
+  static-analysis:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Cache cppcheck
+        id: cache-cppcheck
+        uses: actions/cache@v4
+        with:
+          path: ~/cppcheck
+          key: cppcheck-rules-${{ runner.os }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-tidy libpcre3-dev
+
+      - name: Build cppcheck with HAVE_RULES
+        if: steps.cache-cppcheck.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 https://github.com/danmar/cppcheck.git ~/cppcheck-src
+          cd ~/cppcheck-src
+          make MATCHCOMPILER=yes FILESDIR=/usr/share/cppcheck HAVE_RULES=yes -j$(nproc)
+          mkdir -p ~/cppcheck/bin
+          cp cppcheck ~/cppcheck/bin/
+
+      - name: Install cppcheck
+        run: |
+          sudo cp ~/cppcheck/bin/cppcheck /usr/local/bin/
+          sudo chmod +x /usr/local/bin/cppcheck
+
+      - name: Cache CMake build
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: ${{ runner.os }}-cmake-deps-${{ hashFiles('cmake/Dependencies.cmake') }}
+          restore-keys: |
+            ${{ runner.os }}-cmake-deps-
+
+      - name: Configure build
+        run: cmake -B build -S .
+
+      - name: Run cppcheck
+        run: make cppcheck
+
+      - name: Run clang-tidy
+        run: make tidy
+
+  format-check:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format
+
+      - name: Check formatting
+        run: |
+          make format
+          if ! git diff --quiet; then
+            echo "Code is not formatted correctly"
+            git diff
+            exit 1
+          fi
+
+  complexity:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install lizard
+        run: pip install lizard
+
+      - name: Cache CMake build
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: ${{ runner.os }}-cmake-deps-${{ hashFiles('cmake/Dependencies.cmake') }}
+          restore-keys: |
+            ${{ runner.os }}-cmake-deps-
+
+      - name: Configure build
+        run: cmake -B build -S .
+
+      - name: Run complexity check
+        run: make complexity
+
+  coverage:
+    runs-on: ubuntu-22.04
+    needs: build-and-test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++-11 lcov
+
+      - name: Generate coverage
+        run: make coverage
+        env:
+          CXX: g++-11
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: build/coverage-report/
+          retention-days: 7
