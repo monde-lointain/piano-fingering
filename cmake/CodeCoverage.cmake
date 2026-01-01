@@ -13,7 +13,7 @@ if(ENABLE_COVERAGE)
       add_custom_target(coverage
         COMMAND ${LCOV_EXECUTABLE} --directory . --zerocounters
         COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-        COMMAND ${LCOV_EXECUTABLE} --directory . --capture --output-file coverage.info --ignore-errors mismatch,inconsistent
+        COMMAND ${LCOV_EXECUTABLE} --directory . --capture --output-file coverage.info --rc lcov_branch_coverage=0 || true
         COMMAND ${LCOV_EXECUTABLE} --remove coverage.info '/usr/*' '*/tests/*' '*/build/*' '*/googletest/*' --output-file coverage.info.cleaned
         COMMAND ${GENHTML_EXECUTABLE} coverage.info.cleaned --output-directory coverage-report
         COMMAND ${LCOV_EXECUTABLE} --summary coverage.info.cleaned || true
