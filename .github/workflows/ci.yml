@@ -17,7 +17,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake g++-11
+          sudo apt-get install -y cmake g++
 
       - name: Cache CMake build
         uses: actions/cache@v4
@@ -30,7 +30,7 @@ jobs:
       - name: Build
         run: make build
         env:
-          CXX: g++-11
+          CXX: g++
 
       - name: Run tests
         run: make test
@@ -144,12 +144,12 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake g++-11 lcov
+          sudo apt-get install -y cmake g++ lcov
 
       - name: Generate coverage
         run: make coverage
         env:
-          CXX: g++-11
+          CXX: g++
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
