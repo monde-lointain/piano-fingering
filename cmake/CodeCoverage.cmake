@@ -13,9 +13,11 @@ if(ENABLE_COVERAGE)
       add_custom_target(coverage
         COMMAND ${LCOV_EXECUTABLE} --directory . --zerocounters
         COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-        COMMAND ${LCOV_EXECUTABLE} --directory . --capture --output-file coverage.info
-        COMMAND ${LCOV_EXECUTABLE} --remove coverage.info '/usr/*' '*/tests/*' '*/build/*' --output-file coverage.info.cleaned
+        COMMAND ${LCOV_EXECUTABLE} --directory . --capture --output-file coverage.info --ignore-errors mismatch,inconsistent
+        COMMAND ${LCOV_EXECUTABLE} --remove coverage.info '/usr/*' '*/tests/*' '*/build/*' '*/googletest/*' --output-file coverage.info.cleaned
         COMMAND ${GENHTML_EXECUTABLE} coverage.info.cleaned --output-directory coverage-report
+        COMMAND ${LCOV_EXECUTABLE} --summary coverage.info.cleaned || true
+        COMMAND ${CMAKE_COMMAND} -E echo "Coverage report generated in ${CMAKE_BINARY_DIR}/coverage-report/index.html"
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         COMMENT "Generating code coverage report"
       )

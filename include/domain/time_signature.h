@@ -40,12 +40,12 @@ class TimeSignature {
   }
 };
 
-[[nodiscard]] inline TimeSignature common_time() noexcept {
-  return TimeSignature(4, 4);
+[[nodiscard]] inline TimeSignature common_time() {
+  return {4, 4};
 }
 
-[[nodiscard]] inline TimeSignature cut_time() noexcept {
-  return TimeSignature(2, 2);
+[[nodiscard]] inline TimeSignature cut_time() {
+  return {2, 2};
 }
 
 inline std::ostream& operator<<(std::ostream& os, const TimeSignature& ts) {

@@ -46,7 +46,7 @@ class Fingering {
     for (const auto& assignment : assignments_) {
       if (assignment.has_value()) {
         int finger_val = to_int(assignment.value());
-        if (used_fingers.count(finger_val) > 0) {
+        if (used_fingers.contains(finger_val)) {
           return true;  // Duplicate finger found
         }
         used_fingers.insert(finger_val);
@@ -65,9 +65,12 @@ class Fingering {
 inline std::ostream& operator<<(std::ostream& os, const Fingering& fingering) {
   os << "Fingering([";
   for (size_t i = 0; i < fingering.size(); ++i) {
-    if (i > 0) os << ", ";
-    if (fingering[i].has_value()) {
-      os << to_int(fingering[i].value());
+    if (i > 0) {
+      os << ", ";
+    }
+    const auto& assignment = fingering[i];
+    if (assignment.has_value()) {
+      os << to_int(*assignment);
     } else {
       os << "null";
     }

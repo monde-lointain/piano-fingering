@@ -105,8 +105,10 @@ complexity-full: $(BUILD_DIR)/Makefile
 complexity-xml: $(BUILD_DIR)/Makefile
 	@cmake --build $(BUILD_DIR) --target complexity-xml
 
-# Coverage target
-coverage: $(BUILD_DIR)/Makefile
+# Coverage target (requires reconfiguration with ENABLE_COVERAGE=ON)
+coverage:
+	@cmake -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Debug -DENABLE_COVERAGE=ON
+	@cmake --build $(BUILD_DIR)
 	@cmake --build $(BUILD_DIR) --target coverage
 
 # SLOC targets

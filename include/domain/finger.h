@@ -2,12 +2,13 @@
 #define PIANO_FINGERING_DOMAIN_FINGER_H_
 
 #include <array>
+#include <cstdint>
 #include <ostream>
 #include <stdexcept>
 
 namespace piano_fingering::domain {
 
-enum class Finger : int {
+enum class Finger : std::uint8_t {
   kThumb = 1,
   kIndex = 2,
   kMiddle = 3,
