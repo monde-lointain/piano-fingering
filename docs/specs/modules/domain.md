@@ -20,7 +20,7 @@ This module defines the **ubiquitous language** of the domain - all other module
 
 | Entity | Owned Data | Invariants |
 |--------|-----------|-----------|
-| `Pitch` | Modified keyboard distance (0-14 per octave) | Immutable, validated on construction |
+| `Pitch` | Modified keyboard distance (0-13 per octave) | Immutable, validated on construction |
 | `Finger` | Finger number (1-5) | 1=Thumb, 5=Pinky |
 | `Hand` | Enumeration (LEFT, RIGHT) | Binary choice |
 | `Note` | `{Pitch pitch, int octave, int duration, bool is_rest, int staff, int voice}` | Duration > 0, staff ∈ {1,2}, voice ∈ {1,2,3,4} |
@@ -49,21 +49,21 @@ This is a **leaf module** - it has no outgoing dependencies.
 **API Surface:**
 ```cpp
 // Construction (immutable after creation)
-Pitch::Pitch(int value);  // throws if value not in [0, 14]
-Note::Note(Pitch p, int octave, int duration, bool is_rest, int staff, int voice);
-Slice::Slice(std::vector<Note> notes);  // validates max 5 notes
-Measure::Measure(int number, std::vector<Slice> slices, TimeSig sig);
-Piece::Piece(std::vector<Measure> left, std::vector<Measure> right, Metadata meta);
+Pitch::Pitch(int value);  // throws if value not in [0, 13]
+Note::Note(Pitch p, int octave, uint32_t duration, bool is_rest, int staff, int voice);
+Slice::Slice(std::initializer_list<Note> notes);  // validates max 5 notes
+Measure::Measure(int number, std::initializer_list<Slice> slices, TimeSignature sig);
+Piece::Piece(Metadata meta, std::initializer_list<Measure> left, std::initializer_list<Measure> right);
 
 // Accessors (all const)
 Pitch Note::pitch() const noexcept;
 int Note::octave() const noexcept;
-const std::vector<Note>& Slice::notes() const noexcept;
+size_t Slice::size() const noexcept;
 const std::vector<Measure>& Piece::left_hand() const noexcept;
 
 // Utilities
 int Pitch::distance_to(Pitch other) const noexcept;  // Keyboard distance
-bool Note::is_black_key() const noexcept;  // pitch % 2 == 1
+bool Pitch::is_black_key() const noexcept;  // {1,3,7,9,11}
 ```
 
 ---
@@ -92,7 +92,7 @@ Depends on:
 
 #### Value Type Invariants
 1. **Pitch Construction**
-   - Valid range [0, 14] accepted
+   - Valid range [0, 13] accepted
    - Out-of-range throws `std::invalid_argument`
    - Distance calculation: `Pitch(5).distance_to(Pitch(10))` → 5
 
@@ -101,7 +101,7 @@ Depends on:
    - Octave range [0, 10] enforced
    - Duration must be positive
    - Staff must be 1 or 2
-   - `is_black_key()` correctness (1,3,6,8,10,13 are black)
+   - `is_black_key()` correctness (1,3,7,9,11 are black)
 
 3. **Slice Validation**
    - Empty slice allowed (rest measure)
@@ -120,22 +120,23 @@ Depends on:
 ```cpp
 TEST(PitchTest, ValidConstruction) {
   EXPECT_NO_THROW(Pitch(0));
-  EXPECT_NO_THROW(Pitch(14));
-  EXPECT_THROW(Pitch(15), std::invalid_argument);
+  EXPECT_NO_THROW(Pitch(13));
+  EXPECT_THROW(Pitch(14), std::invalid_argument);
 }
 
-TEST(NoteTest, BlackKeyDetection) {
-  Note C4(Pitch(1), 4, 480, false, 1, 1);  // C is white (1 is white)
-  Note CSharp4(Pitch(2), 4, 480, false, 1, 1);  // C# is black (2 is black? No - pitch 1=C, pitch 2=C#)
-  // Actually: pitch 0=C, 1=C#, 2=D, 3=D#, 4=E, 5=F(imaginary), 6=F#, ...
-  // Black keys: odd pitches (1,3,6,8,10,13)
-  EXPECT_FALSE(Note(Pitch(0), 4, 480, false, 1, 1).is_black_key());  // C
-  EXPECT_TRUE(Note(Pitch(1), 4, 480, false, 1, 1).is_black_key());   // C#
+TEST(PitchTest, BlackKeyDetection) {
+  // Black keys: {1,3,7,9,11} = {C#, D#, F#, G#, A#}
+  EXPECT_FALSE(Pitch(0).is_black_key());   // C
+  EXPECT_TRUE(Pitch(1).is_black_key());    // C#
+  EXPECT_FALSE(Pitch(2).is_black_key());   // D
+  EXPECT_TRUE(Pitch(3).is_black_key());    // D#
+  EXPECT_FALSE(Pitch(6).is_black_key());   // F
+  EXPECT_TRUE(Pitch(7).is_black_key());    // F#
 }
 
 TEST(SliceTest, MaxNotesEnforced) {
-  std::vector<Note> six_notes(6, Note(Pitch(0), 4, 480, false, 1, 1));
-  EXPECT_THROW(Slice(six_notes), std::invalid_argument);
+  Note n(Pitch(0), 4, 480, false, 1, 1);
+  EXPECT_THROW(Slice({n, n, n, n, n, n}), std::invalid_argument);
 }
 ```
 
@@ -157,10 +158,16 @@ TEST(SliceTest, MaxNotesEnforced) {
 
 ```
 include/domain/
-  types.h           // Pitch, Finger, Hand enums + utility functions
-  note.h            // Note, Slice, Measure classes
-  piece.h           // Piece class + Metadata struct
-  fingering.h       // Fingering class
+  hand.h            // Hand enum (LEFT, RIGHT)
+  finger.h          // Finger enum (1-5)
+  pitch.h           // Pitch value type (0-13 per octave)
+  note.h            // Note value type (pitch + octave + duration + metadata)
+  slice.h           // Slice container (max 5 simultaneous notes)
+  time_signature.h  // TimeSignature value type
+  measure.h         // Measure container (slices + time signature)
+  metadata.h        // Metadata (title, composer)
+  piece.h           // Piece container (left/right hand measures)
+  fingering.h       // Fingering (optional finger assignments)
 ```
 
 ---
@@ -171,14 +178,14 @@ include/domain/
 
 Per problem description, includes imaginary black keys:
 ```
-C=0, C#=1, D=2, D#=3, E=4, [F-imaginary]=5, F#=6, G=7, G#=8, A=9, A#=10, B=11, [C-imaginary]=12, (repeat next octave at +14)
+C=0, C#=1, D=2, D#=3, E=4, [imaginary]=5, F=6, F#=7, G=8, G#=9, A=10, A#=11, B=12, [imaginary]=13, (repeat next octave at +14)
 ```
 
 **Black key detection:**
 ```cpp
 bool is_black_key(Pitch p) {
   int mod = p.value() % 14;
-  return mod == 1 || mod == 3 || mod == 6 || mod == 8 || mod == 10 || mod == 13;
+  return mod == 1 || mod == 3 || mod == 7 || mod == 9 || mod == 11;
 }
 ```
 
@@ -188,14 +195,16 @@ bool is_black_key(Pitch p) {
 class Fingering {
   std::vector<std::optional<Finger>> assignments_;  // Index matches note index in Slice
 public:
-  explicit Fingering(size_t num_notes) : assignments_(num_notes, std::nullopt) {}
+  Fingering() = default;
+  Fingering(std::initializer_list<std::optional<Finger>> assignments);
 
-  void assign(size_t note_idx, Finger f);
-  std::optional<Finger> get(size_t note_idx) const;
+  const std::optional<Finger>& operator[](size_t index) const;
+  size_t size() const noexcept;
+  bool empty() const noexcept;
 
   // Validation
   bool is_complete() const;  // All notes have assignments
-  bool violates_hard_constraint() const;  // Check for duplicate fingers in same slice
+  bool violates_hard_constraint(const Slice& slice) const;  // Check for duplicate fingers in same slice
 };
 ```
 
