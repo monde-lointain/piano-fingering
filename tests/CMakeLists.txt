@@ -23,6 +23,7 @@ add_executable(domain_test
   domain/slice_test.cpp
   domain/time_signature_test.cpp
   domain/measure_test.cpp
+  domain/piece_test.cpp
 )
 target_include_directories(domain_test
   PRIVATE ${CMAKE_SOURCE_DIR}/include
