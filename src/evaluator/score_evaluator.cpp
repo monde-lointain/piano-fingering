@@ -66,8 +66,42 @@ std::vector<NoteInfo> collect_notes(
   return notes;
 }
 
+// Process chord slice: compute penalties for all note pairs in a chord
+double process_chord_slice(const domain::Slice& slice,
+                           const domain::Fingering& chord_fingering,
+                           const config::DistanceMatrix& distances,
+                           const config::RuleWeights& weights) {
+  std::vector<NoteInfo> chord_notes;
+  size_t note_idx = 0;
+  for (const auto& note : slice) {
+    if (!note.is_rest()) {
+      if (note_idx < chord_fingering.size()) {
+        const auto& finger_opt = chord_fingering[note_idx];
+        if (finger_opt.has_value()) {
+          chord_notes.push_back({*finger_opt, note.absolute_pitch(),
+                                 note.pitch().is_black_key()});
+        }
+      }
+      ++note_idx;
+    }
+  }
+
+  double penalty = 0.0;
+  for (size_t j = 0; j < chord_notes.size(); ++j) {
+    for (size_t k = j + 1; k < chord_notes.size(); ++k) {
+      const auto& cn1 = chord_notes[j];
+      const auto& cn2 = chord_notes[k];
+      const auto& pair_distances =
+          distances.get_pair(finger_pair_from(cn1.finger, cn2.finger));
+      int actual_distance = cn2.pitch - cn1.pitch;
+      penalty += apply_chord_penalty(pair_distances, actual_distance, weights);
+    }
+  }
+
+  return penalty;
+}
+
 // Apply chord penalties (Rule 14)
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 double apply_chord_penalties(const std::vector<domain::Measure>& measures,
                              const std::vector<domain::Fingering>& fingerings,
                              const config::DistanceMatrix& distances,
@@ -93,33 +127,8 @@ double apply_chord_penalties(const std::vector<domain::Measure>& measures,
       }
 
       if (slice.size() > 1) {
-        const auto& chord_fingering = fingerings[fingering_idx];
-        std::vector<NoteInfo> chord_notes;
-        size_t note_idx = 0;
-        for (const auto& note : slice) {
-          if (!note.is_rest()) {
-            if (note_idx < chord_fingering.size()) {
-              const auto& finger_opt = chord_fingering[note_idx];
-              if (finger_opt.has_value()) {
-                chord_notes.push_back({*finger_opt, note.absolute_pitch(),
-                                       note.pitch().is_black_key()});
-              }
-            }
-            ++note_idx;
-          }
-        }
-
-        for (size_t j = 0; j < chord_notes.size(); ++j) {
-          for (size_t k = j + 1; k < chord_notes.size(); ++k) {
-            const auto& cn1 = chord_notes[j];
-            const auto& cn2 = chord_notes[k];
-            const auto& pair_distances =
-                distances.get_pair(finger_pair_from(cn1.finger, cn2.finger));
-            int actual_distance = cn2.pitch - cn1.pitch;
-            penalty +=
-                apply_chord_penalty(pair_distances, actual_distance, weights);
-          }
-        }
+        penalty += process_chord_slice(slice, fingerings[fingering_idx],
+                                       distances, weights);
       }
 
       ++fingering_idx;
@@ -127,6 +136,23 @@ double apply_chord_penalties(const std::vector<domain::Measure>& measures,
   }
 
   return penalty;
+}
+
+// Compute Rule 11 parameters from two notes
+struct Rule11Params {
+  int lower_pitch;
+  int higher_pitch;
+  bool lower_black;
+  bool higher_black;
+  domain::Finger lower_finger;
+  domain::Finger higher_finger;
+};
+
+Rule11Params compute_rule11_params(const NoteInfo& n1, const NoteInfo& n2) {
+  if (n1.pitch < n2.pitch) {
+    return {n1.pitch, n2.pitch, n1.is_black, n2.is_black, n1.finger, n2.finger};
+  }
+  return {n2.pitch, n1.pitch, n2.is_black, n1.is_black, n2.finger, n1.finger};
 }
 
 // Apply two-note rules between consecutive notes
@@ -162,14 +188,10 @@ double apply_two_note_rules(const std::vector<NoteInfo>& notes, size_t i,
   bool crossing = is_crossing(n1.finger, n1.pitch, n2.finger, n2.pitch, hand);
   penalty += apply_rule_10(crossing, n1.is_black, n2.is_black);
 
-  int lower_pitch = (n1.pitch < n2.pitch) ? n1.pitch : n2.pitch;
-  int higher_pitch = (n1.pitch > n2.pitch) ? n1.pitch : n2.pitch;
-  bool lower_black = (n1.pitch < n2.pitch) ? n1.is_black : n2.is_black;
-  bool higher_black = (n1.pitch > n2.pitch) ? n1.is_black : n2.is_black;
-  domain::Finger lower_finger = (n1.pitch < n2.pitch) ? n1.finger : n2.finger;
-  domain::Finger higher_finger = (n1.pitch > n2.pitch) ? n1.finger : n2.finger;
-  penalty += apply_rule_11(lower_pitch, lower_black, lower_finger, higher_pitch,
-                           higher_black, higher_finger);
+  auto params = compute_rule11_params(n1, n2);
+  penalty += apply_rule_11(params.lower_pitch, params.lower_black,
+                           params.lower_finger, params.higher_pitch,
+                           params.higher_black, params.higher_finger);
 
   const auto& pair_distances =
       distances.get_pair(finger_pair_from(n1.finger, n2.finger));
