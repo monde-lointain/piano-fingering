@@ -3,6 +3,28 @@
 namespace piano_fingering::config {
 namespace {
 
+// Mirror right hand to create left hand by swapping and negating min/max
+DistanceMatrix mirror_to_left_hand(const DistanceMatrix& right) {
+  DistanceMatrix left{};
+
+  for (size_t i = 0; i < right.finger_pairs.size(); ++i) {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
+    const auto& r_pair = right.finger_pairs[i];
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
+    auto& l_pair = left.finger_pairs[i];
+
+    // Min and Max have to be interchanged and multiplied by -1
+    // R(1-2) [-8, 10]  ->  Swap [10, -8]  ->  Negate [-10, 8]
+    l_pair.min_prac = -r_pair.max_prac;
+    l_pair.min_comf = -r_pair.max_comf;
+    l_pair.min_rel = -r_pair.max_rel;
+    l_pair.max_rel = -r_pair.min_rel;
+    l_pair.max_comf = -r_pair.min_comf;
+    l_pair.max_prac = -r_pair.min_prac;
+  }
+  return left;
+}
+
 // From SRS Appendix A.1 - Medium Hand (Default)
 // Note: Left hand distances are mirrored (negated min/max)
 DistanceMatrix make_medium_right_hand() {
@@ -21,8 +43,7 @@ DistanceMatrix make_medium_right_hand() {
 }
 
 DistanceMatrix make_medium_left_hand() {
-  // Left hand: same absolute distances, mirrored orientation
-  return make_medium_right_hand();
+  return mirror_to_left_hand(make_medium_right_hand());
 }
 
 // Small hand (exact values from spec)
@@ -60,9 +81,10 @@ DistanceMatrix make_large_right_hand() {
 }  // namespace
 
 const Preset& get_small_preset() {
-  static const Preset kPreset{std::string(kPresetSmall),
-                              make_small_right_hand(),  // NOLINT
-                              make_small_right_hand(), RuleWeights::defaults()};
+  static const Preset kPreset{
+      std::string(kPresetSmall),
+      mirror_to_left_hand(make_small_right_hand()),  // NOLINT
+      make_small_right_hand(), RuleWeights::defaults()};
   return kPreset;
 }
 
@@ -74,9 +96,10 @@ const Preset& get_medium_preset() {
 }
 
 const Preset& get_large_preset() {
-  static const Preset kPreset{std::string(kPresetLarge),
-                              make_large_right_hand(),  // NOLINT
-                              make_large_right_hand(), RuleWeights::defaults()};
+  static const Preset kPreset{
+      std::string(kPresetLarge),
+      mirror_to_left_hand(make_large_right_hand()),  // NOLINT
+      make_large_right_hand(), RuleWeights::defaults()};
   return kPreset;
 }
 
