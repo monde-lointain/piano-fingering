@@ -20,6 +20,12 @@ class ScoreEvaluator {
       const std::vector<domain::Fingering>& fingerings,
       domain::Hand hand) const;
 
+  [[nodiscard]] double evaluate_delta(
+      const domain::Piece& piece,
+      const std::vector<domain::Fingering>& current_fingerings,
+      const std::vector<domain::Fingering>& proposed_fingerings,
+      domain::Hand hand) const;
+
  private:
   const config::Config* config_;
 };

@@ -203,5 +203,32 @@ TEST(ScoreEvaluatorTest, EvaluateChordAppliesRule14) {
   EXPECT_GT(score, 0.0);  // Rule 14: wide span with tight fingers
 }
 
+TEST(ScoreEvaluatorTest, EvaluateDeltaReturnsScoreDifference) {
+  Config config{};
+  config.right_hand = make_medium_right();
+  config.weights = config::RuleWeights::defaults();
+  ScoreEvaluator evaluator(config);
+
+  // Two consecutive notes
+  Piece piece(Metadata("Test", "Composer"), {},
+              {Measure(1, {Slice({make_note(0, 4)}), Slice({make_note(0, 5)})},
+                       TimeSignature(4, 4))});
+
+  // Current: thumb -> index
+  std::vector<Fingering> current = {Fingering({Finger::kThumb}),
+                                    Fingering({Finger::kIndex})};
+
+  // Proposed: thumb -> middle
+  std::vector<Fingering> proposed = {Fingering({Finger::kThumb}),
+                                     Fingering({Finger::kMiddle})};
+
+  double delta =
+      evaluator.evaluate_delta(piece, current, proposed, Hand::kRight);
+  double old_score = evaluator.evaluate(piece, current, Hand::kRight);
+  double new_score = evaluator.evaluate(piece, proposed, Hand::kRight);
+
+  EXPECT_DOUBLE_EQ(delta, new_score - old_score);
+}
+
 }  // namespace
 }  // namespace piano_fingering::evaluator

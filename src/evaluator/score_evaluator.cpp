@@ -239,4 +239,14 @@ double ScoreEvaluator::evaluate(
   return total_penalty;
 }
 
+double ScoreEvaluator::evaluate_delta(
+    const domain::Piece& piece,
+    const std::vector<domain::Fingering>& current_fingerings,
+    const std::vector<domain::Fingering>& proposed_fingerings,
+    domain::Hand hand) const {
+  double new_score = evaluate(piece, proposed_fingerings, hand);
+  double old_score = evaluate(piece, current_fingerings, hand);
+  return new_score - old_score;
+}
+
 }  // namespace piano_fingering::evaluator
