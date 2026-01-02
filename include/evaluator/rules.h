@@ -19,6 +19,11 @@ namespace piano_fingering::evaluator {
     const config::FingerPairDistances& distances, int actual_distance,
     const config::RuleWeights& weights);
 
+[[nodiscard]] double apply_rule_5(domain::Finger f);
+[[nodiscard]] double apply_rule_6(domain::Finger f1, domain::Finger f2);
+[[nodiscard]] double apply_rule_7(domain::Finger f1, bool is_black1,
+                                  domain::Finger f2, bool is_black2);
+
 }  // namespace piano_fingering::evaluator
 
 #endif  // PIANO_FINGERING_EVALUATOR_RULES_H_

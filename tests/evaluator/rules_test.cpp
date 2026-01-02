@@ -84,5 +84,28 @@ TEST(RulesTest, Rule14DoesNotDoubleRule13) {
   EXPECT_DOUBLE_EQ(apply_chord_penalty(d, 12, w), 50.0);
 }
 
+TEST(RulesTest, Rule5FourthFingerPenalty) {
+  EXPECT_DOUBLE_EQ(apply_rule_5(Finger::kRing), 1.0);
+  EXPECT_DOUBLE_EQ(apply_rule_5(Finger::kThumb), 0.0);
+  EXPECT_DOUBLE_EQ(apply_rule_5(Finger::kPinky), 0.0);
+}
+
+TEST(RulesTest, Rule6ThirdFourthConsecutive) {
+  EXPECT_DOUBLE_EQ(apply_rule_6(Finger::kMiddle, Finger::kRing), 1.0);
+  EXPECT_DOUBLE_EQ(apply_rule_6(Finger::kRing, Finger::kMiddle), 1.0);
+  EXPECT_DOUBLE_EQ(apply_rule_6(Finger::kThumb, Finger::kIndex), 0.0);
+}
+
+TEST(RulesTest, Rule7ThirdWhiteFourthBlack) {
+  EXPECT_DOUBLE_EQ(apply_rule_7(Finger::kMiddle, false, Finger::kRing, true),
+                   1.0);
+  EXPECT_DOUBLE_EQ(apply_rule_7(Finger::kRing, true, Finger::kMiddle, false),
+                   1.0);
+  EXPECT_DOUBLE_EQ(apply_rule_7(Finger::kMiddle, false, Finger::kRing, false),
+                   0.0);
+  EXPECT_DOUBLE_EQ(apply_rule_7(Finger::kThumb, false, Finger::kIndex, true),
+                   0.0);
+}
+
 }  // namespace
 }  // namespace piano_fingering::evaluator

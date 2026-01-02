@@ -71,8 +71,8 @@ double apply_cascading_penalty(const config::FingerPairDistances& distances,
 }
 
 double apply_chord_penalty(const config::FingerPairDistances& distances,
-                            int actual_distance,
-                            const config::RuleWeights& weights) {
+                           int actual_distance,
+                           const config::RuleWeights& weights) {
   double penalty = 0.0;
 
   int rel_violation = 0;
@@ -100,6 +100,22 @@ double apply_chord_penalty(const config::FingerPairDistances& distances,
   penalty += prac_violation * weights.values[12];  // NOT doubled
 
   return penalty;
+}
+
+double apply_rule_5(Finger f) { return (f == Finger::kRing) ? 1.0 : 0.0; }
+
+double apply_rule_6(Finger f1, Finger f2) {
+  bool has_middle = (f1 == Finger::kMiddle || f2 == Finger::kMiddle);
+  bool has_ring = (f1 == Finger::kRing || f2 == Finger::kRing);
+  return (has_middle && has_ring) ? 1.0 : 0.0;
+}
+
+double apply_rule_7(Finger f1, bool is_black1, Finger f2, bool is_black2) {
+  bool middle_on_white = (f1 == Finger::kMiddle && !is_black1) ||
+                         (f2 == Finger::kMiddle && !is_black2);
+  bool ring_on_black =
+      (f1 == Finger::kRing && is_black1) || (f2 == Finger::kRing && is_black2);
+  return (middle_on_white && ring_on_black) ? 1.0 : 0.0;
 }
 
 }  // namespace piano_fingering::evaluator
