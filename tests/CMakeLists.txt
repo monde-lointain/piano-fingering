@@ -33,3 +33,17 @@ target_link_libraries(domain_test
   PRIVATE GTest::gtest GTest::gtest_main
 )
 gtest_discover_tests(domain_test)
+
+# Config module tests
+add_executable(config_test
+  config/finger_pair_test.cpp
+)
+target_include_directories(config_test
+  PRIVATE ${CMAKE_SOURCE_DIR}/include
+)
+target_link_libraries(config_test
+  PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+)
+gtest_discover_tests(config_test)
