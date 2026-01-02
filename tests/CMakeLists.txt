@@ -56,3 +56,19 @@ target_link_libraries(config_test
     GTest::gtest_main
 )
 gtest_discover_tests(config_test)
+
+# Evaluator module tests
+add_executable(evaluator_test
+  evaluator/score_evaluator_test.cpp
+  evaluator/rules_test.cpp
+)
+target_include_directories(evaluator_test
+  PRIVATE ${CMAKE_SOURCE_DIR}/include
+)
+target_link_libraries(evaluator_test
+  PRIVATE
+    evaluator
+    GTest::gtest
+    GTest::gtest_main
+)
+gtest_discover_tests(evaluator_test)

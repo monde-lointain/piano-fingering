@@ -14,6 +14,20 @@ target_link_libraries(config
   PUBLIC nlohmann_json::nlohmann_json
 )
 
+# Evaluator library
+add_library(evaluator STATIC
+  evaluator/score_evaluator.cpp
+  evaluator/rules.cpp
+)
+
+target_include_directories(evaluator
+  PUBLIC ${CMAKE_SOURCE_DIR}/include
+)
+
+target_link_libraries(evaluator
+  PUBLIC config
+)
+
 # Main executable
 add_executable(piano-fingering
   main.cpp
