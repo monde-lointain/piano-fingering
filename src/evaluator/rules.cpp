@@ -170,12 +170,13 @@ double apply_rule_11([[maybe_unused]] int lower_pitch, bool lower_black,
                      Finger lower_finger, [[maybe_unused]] int higher_pitch,
                      bool higher_black, Finger higher_finger) {
   // Rule 11: lower note white (non-thumb), higher note black (thumb)
+  // Table 2: Score = +2 for this violation
   bool lower_is_non_thumb = (lower_finger != Finger::kThumb);
   bool higher_is_thumb = (higher_finger == Finger::kThumb);
   if (!lower_is_non_thumb || !higher_is_thumb) {
     return 0.0;
   }
-  return (!lower_black && higher_black) ? 1.0 : 0.0;
+  return (!lower_black && higher_black) ? 2.0 : 0.0;
 }
 
 bool is_monotonic(int p1, int p2, int p3) {
@@ -209,10 +210,14 @@ double apply_rule_3(const config::FingerPairDistances& d, int p1, int p2,
 }
 
 double apply_rule_4(const config::FingerPairDistances& d, int span) {
-  if (span <= d.max_comf) {
-    return 0.0;
+  // Rule 4: Penalty for span below MinComf or exceeds MaxComf
+  if (span > d.max_comf) {
+    return static_cast<double>(span - d.max_comf);
   }
-  return static_cast<double>(span - d.max_comf);
+  if (span < d.min_comf) {
+    return static_cast<double>(d.min_comf - span);
+  }
+  return 0.0;
 }
 
 double apply_rule_12(int p1, int p2, int p3, Finger f1,

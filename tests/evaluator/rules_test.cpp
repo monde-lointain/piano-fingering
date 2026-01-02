@@ -166,8 +166,9 @@ TEST(RulesTest, Rule10CrossingSameLevel) {
 
 TEST(RulesTest, Rule11ThumbBlackNonThumbWhite) {
   // Lower pitch white (non-thumb), higher pitch black (thumb) = Rule 11
+  // Table 2 spec: Score = +2
   EXPECT_DOUBLE_EQ(
-      apply_rule_11(60, false, Finger::kIndex, 65, true, Finger::kThumb), 1.0);
+      apply_rule_11(60, false, Finger::kIndex, 65, true, Finger::kThumb), 2.0);
   // Thumb white: no penalty
   EXPECT_DOUBLE_EQ(
       apply_rule_11(60, false, Finger::kIndex, 65, false, Finger::kThumb), 0.0);
@@ -243,8 +244,10 @@ TEST(RulesTest, Rule3NoPenalty) {
 TEST(RulesTest, Rule4TripletSpanExceedsComfort) {
   FingerPairDistances d{-8, -6, 1, 5, 8, 10};
   EXPECT_DOUBLE_EQ(apply_rule_4(d, 5), 0.0);   // Within comfort
-  EXPECT_DOUBLE_EQ(apply_rule_4(d, 9), 1.0);   // Exceeds by 1
-  EXPECT_DOUBLE_EQ(apply_rule_4(d, 12), 4.0);  // Exceeds by 4
+  EXPECT_DOUBLE_EQ(apply_rule_4(d, 9), 1.0);   // Exceeds max_comf by 1
+  EXPECT_DOUBLE_EQ(apply_rule_4(d, 12), 4.0);  // Exceeds max_comf by 4
+  EXPECT_DOUBLE_EQ(apply_rule_4(d, -9), 3.0);  // Below min_comf (-6) by 3
+  EXPECT_DOUBLE_EQ(apply_rule_4(d, -5), 0.0);  // Within comfort (negative)
 }
 
 TEST(RulesTest, Rule12SameFingerReuse) {
