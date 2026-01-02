@@ -43,12 +43,14 @@ add_executable(config_test
   config/rule_weights_test.cpp
   config/algorithm_parameters_test.cpp
   config/config_test.cpp
+  config/preset_test.cpp
 )
 target_include_directories(config_test
   PRIVATE ${CMAKE_SOURCE_DIR}/include
 )
 target_link_libraries(config_test
   PRIVATE
+    config
     GTest::gtest
     GTest::gtest_main
 )
