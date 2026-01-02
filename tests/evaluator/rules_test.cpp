@@ -68,5 +68,21 @@ TEST(RulesTest, CascadingPenaltyNegativeDistance) {
   EXPECT_DOUBLE_EQ(apply_cascading_penalty(d, -10, w), 39.0);
 }
 
+TEST(RulesTest, Rule14DoublesRules1And2) {
+  FingerPairDistances d{-8, -6, 1, 5, 8, 10};
+  RuleWeights w = RuleWeights::defaults();
+  // Distance 9: Rule 2 violation=4, Rule 1 violation=1
+  // Chord: Rule 2 doubled: 4*2*1.0=8, Rule 1 doubled: 1*2*2.0=4 -> Total 12.0
+  EXPECT_DOUBLE_EQ(apply_chord_penalty(d, 9, w), 12.0);
+}
+
+TEST(RulesTest, Rule14DoesNotDoubleRule13) {
+  FingerPairDistances d{-8, -6, 1, 5, 8, 10};
+  RuleWeights w = RuleWeights::defaults();
+  // Distance 12: prac_viol=2, comf_viol=4, rel_viol=7
+  // Chord: 7*2*1.0 + 4*2*2.0 + 2*10.0 = 14 + 16 + 20 = 50.0
+  EXPECT_DOUBLE_EQ(apply_chord_penalty(d, 12, w), 50.0);
+}
+
 }  // namespace
 }  // namespace piano_fingering::evaluator

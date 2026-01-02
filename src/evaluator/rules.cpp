@@ -70,4 +70,36 @@ double apply_cascading_penalty(const config::FingerPairDistances& distances,
   return penalty;
 }
 
+double apply_chord_penalty(const config::FingerPairDistances& distances,
+                            int actual_distance,
+                            const config::RuleWeights& weights) {
+  double penalty = 0.0;
+
+  int rel_violation = 0;
+  if (actual_distance < distances.min_rel) {
+    rel_violation = distances.min_rel - actual_distance;
+  } else if (actual_distance > distances.max_rel) {
+    rel_violation = actual_distance - distances.max_rel;
+  }
+  penalty += rel_violation * 2.0 * weights.values[1];  // Doubled
+
+  int comf_violation = 0;
+  if (actual_distance < distances.min_comf) {
+    comf_violation = distances.min_comf - actual_distance;
+  } else if (actual_distance > distances.max_comf) {
+    comf_violation = actual_distance - distances.max_comf;
+  }
+  penalty += comf_violation * 2.0 * weights.values[0];  // Doubled
+
+  int prac_violation = 0;
+  if (actual_distance < distances.min_prac) {
+    prac_violation = distances.min_prac - actual_distance;
+  } else if (actual_distance > distances.max_prac) {
+    prac_violation = actual_distance - distances.max_prac;
+  }
+  penalty += prac_violation * weights.values[12];  // NOT doubled
+
+  return penalty;
+}
+
 }  // namespace piano_fingering::evaluator

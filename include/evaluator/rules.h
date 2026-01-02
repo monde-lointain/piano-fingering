@@ -15,6 +15,10 @@ namespace piano_fingering::evaluator {
     const config::FingerPairDistances& distances, int actual_distance,
     const config::RuleWeights& weights);
 
+[[nodiscard]] double apply_chord_penalty(
+    const config::FingerPairDistances& distances, int actual_distance,
+    const config::RuleWeights& weights);
+
 }  // namespace piano_fingering::evaluator
 
 #endif  // PIANO_FINGERING_EVALUATOR_RULES_H_
