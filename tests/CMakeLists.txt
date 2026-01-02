@@ -42,6 +42,7 @@ add_executable(config_test
   config/distance_matrix_test.cpp
   config/rule_weights_test.cpp
   config/algorithm_parameters_test.cpp
+  config/config_test.cpp
 )
 target_include_directories(config_test
   PRIVATE ${CMAKE_SOURCE_DIR}/include
