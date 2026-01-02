@@ -21,8 +21,7 @@ struct FingerPairDistances {
       return false;
     }
     // MinPrac <= MinComf <= MinRel < MaxRel <= MaxComf <= MaxPrac
-    return min_prac <= min_comf && min_comf <= min_rel &&
-           min_rel < max_rel &&
+    return min_prac <= min_comf && min_comf <= min_rel && min_rel < max_rel &&
            max_rel <= max_comf && max_comf <= max_prac;
   }
 

@@ -1,4 +1,5 @@
 #include "config/distance_matrix.h"
+
 #include <gtest/gtest.h>
 
 namespace piano_fingering::config {
@@ -11,8 +12,8 @@ TEST(DistanceMatrixTest, HasTenFingerPairs) {
 
 TEST(DistanceMatrixTest, GetPairReturnsCorrectElement) {
   DistanceMatrix matrix{};
-  matrix.finger_pairs[static_cast<size_t>(FingerPair::kThumbIndex)] =
-      {-5, -3, -1, 1, 3, 5};
+  matrix.finger_pairs[static_cast<size_t>(FingerPair::kThumbIndex)] = {
+      -5, -3, -1, 1, 3, 5};
   const auto& pair = matrix.get_pair(FingerPair::kThumbIndex);
   EXPECT_EQ(pair.min_prac, -5);
 }

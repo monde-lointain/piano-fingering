@@ -3,10 +3,9 @@
 #include <algorithm>
 #include <cctype>
 #include <fstream>
+#include <nlohmann/json.hpp>
 #include <string>
 #include <unordered_map>
-
-#include <nlohmann/json.hpp>
 
 #include "config/configuration_error.h"
 #include "config/preset.h"
@@ -22,20 +21,15 @@ std::string to_lower(std::string_view str) {
 }
 
 FingerPair finger_pair_from_string(const std::string& str) {
-  static const std::unordered_map<std::string, FingerPair> mapping = {
-      {"1-2", FingerPair::kThumbIndex},
-      {"1-3", FingerPair::kThumbMiddle},
-      {"1-4", FingerPair::kThumbRing},
-      {"1-5", FingerPair::kThumbPinky},
-      {"2-3", FingerPair::kIndexMiddle},
-      {"2-4", FingerPair::kIndexRing},
-      {"2-5", FingerPair::kIndexPinky},
-      {"3-4", FingerPair::kMiddleRing},
-      {"3-5", FingerPair::kMiddlePinky},
-      {"4-5", FingerPair::kRingPinky},
+  static const std::unordered_map<std::string, FingerPair> kMapping = {
+      {"1-2", FingerPair::kThumbIndex},  {"1-3", FingerPair::kThumbMiddle},
+      {"1-4", FingerPair::kThumbRing},   {"1-5", FingerPair::kThumbPinky},
+      {"2-3", FingerPair::kIndexMiddle}, {"2-4", FingerPair::kIndexRing},
+      {"2-5", FingerPair::kIndexPinky},  {"3-4", FingerPair::kMiddleRing},
+      {"3-5", FingerPair::kMiddlePinky}, {"4-5", FingerPair::kRingPinky},
   };
-  auto it = mapping.find(str);
-  if (it == mapping.end()) {
+  auto it = kMapping.find(str);
+  if (it == kMapping.end()) {
     throw ConfigurationError("Unknown finger pair: " + str);
   }
   return it->second;
@@ -47,19 +41,31 @@ void apply_distance_overrides(DistanceMatrix& matrix,
     FingerPair pair = finger_pair_from_string(pair_str);
     auto& d = matrix.get_pair(pair);
 
-    if (values.contains("MinPrac")) d.min_prac = values["MinPrac"].get<int>();
-    if (values.contains("MinComf")) d.min_comf = values["MinComf"].get<int>();
-    if (values.contains("MinRel")) d.min_rel = values["MinRel"].get<int>();
-    if (values.contains("MaxRel")) d.max_rel = values["MaxRel"].get<int>();
-    if (values.contains("MaxComf")) d.max_comf = values["MaxComf"].get<int>();
-    if (values.contains("MaxPrac")) d.max_prac = values["MaxPrac"].get<int>();
+    if (values.contains("MinPrac")) {
+      d.min_prac = values["MinPrac"].get<int>();
+    }
+    if (values.contains("MinComf")) {
+      d.min_comf = values["MinComf"].get<int>();
+    }
+    if (values.contains("MinRel")) {
+      d.min_rel = values["MinRel"].get<int>();
+    }
+    if (values.contains("MaxRel")) {
+      d.max_rel = values["MaxRel"].get<int>();
+    }
+    if (values.contains("MaxComf")) {
+      d.max_comf = values["MaxComf"].get<int>();
+    }
+    if (values.contains("MaxPrac")) {
+      d.max_prac = values["MaxPrac"].get<int>();
+    }
   }
 }
 
 }  // namespace
 
 Config ConfigManager::load_preset(std::string_view name) {
-  const std::string lower_name = to_lower(name);
+  const std::string lower_name = to_lower(name);  // NOLINT
 
   if (lower_name == "small") {
     return get_small_preset().to_config();
@@ -93,13 +99,17 @@ Config ConfigManager::load_custom(const std::filesystem::path& path,
   // Apply algorithm overrides
   if (json.contains("algorithm")) {
     const auto& algo = json["algorithm"];
-    if (algo.contains("beam_width"))
+    if (algo.contains("beam_width")) {
       config.algorithm.beam_width = algo["beam_width"].get<std::size_t>();
-    if (algo.contains("ils_iterations"))
-      config.algorithm.ils_iterations = algo["ils_iterations"].get<std::size_t>();
-    if (algo.contains("perturbation_strength"))
+    }
+    if (algo.contains("ils_iterations")) {
+      config.algorithm.ils_iterations =
+          algo["ils_iterations"].get<std::size_t>();
+    }
+    if (algo.contains("perturbation_strength")) {
       config.algorithm.perturbation_strength =
           algo["perturbation_strength"].get<std::size_t>();
+    }
   }
 
   // Apply rule_weights overrides (null = keep default)
@@ -107,7 +117,7 @@ Config ConfigManager::load_custom(const std::filesystem::path& path,
     const auto& weights = json["rule_weights"];
     for (std::size_t i = 0; i < weights.size() && i < kRuleCount; ++i) {
       if (!weights[i].is_null()) {
-        config.weights.values[i] = weights[i].get<double>();
+        config.weights.values[i] = weights[i].get<double>();  // NOLINT
       }
     }
   }
@@ -115,10 +125,12 @@ Config ConfigManager::load_custom(const std::filesystem::path& path,
   // Apply distance_matrix overrides
   if (json.contains("distance_matrix")) {
     const auto& dm = json["distance_matrix"];
-    if (dm.contains("left_hand"))
+    if (dm.contains("left_hand")) {
       apply_distance_overrides(config.left_hand, dm["left_hand"]);
-    if (dm.contains("right_hand"))
+    }
+    if (dm.contains("right_hand")) {
       apply_distance_overrides(config.right_hand, dm["right_hand"]);
+    }
   }
 
   std::string error;

@@ -18,8 +18,8 @@ struct Config {
            weights.is_valid() && algorithm.is_valid();
   }
 
-  [[nodiscard]] constexpr bool operator==(
-      const Config& other) const noexcept = default;
+  [[nodiscard]] constexpr bool operator==(const Config& other) const noexcept =
+      default;
 };
 
 }  // namespace piano_fingering::config

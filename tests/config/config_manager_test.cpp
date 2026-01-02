@@ -1,7 +1,10 @@
 #include "config/config_manager.h"
+
 #include <gtest/gtest.h>
+
 #include <filesystem>
 #include <fstream>
+
 #include "config/configuration_error.h"
 #include "config/preset.h"
 
@@ -25,9 +28,9 @@ TEST(ConfigManagerTest, LoadPresetLarge) {
 }
 
 TEST(ConfigManagerTest, LoadPresetThrowsForUnknown) {
-  EXPECT_THROW({
-    [[maybe_unused]] auto cfg = ConfigManager::load_preset("Unknown");
-  }, ConfigurationError);
+  EXPECT_THROW(
+      { [[maybe_unused]] auto cfg = ConfigManager::load_preset("Unknown"); },
+      ConfigurationError);
 }
 
 TEST(ConfigManagerTest, LoadPresetCaseInsensitive) {
@@ -65,9 +68,7 @@ class ConfigManagerJsonTest : public ::testing::Test {
     std::filesystem::create_directories(test_dir_);
   }
 
-  void TearDown() override {
-    std::filesystem::remove_all(test_dir_);
-  }
+  void TearDown() override { std::filesystem::remove_all(test_dir_); }
 
   void write_json(const std::string& filename, const std::string& content) {
     std::ofstream file(test_dir_ / filename);
@@ -123,15 +124,21 @@ TEST_F(ConfigManagerJsonTest, LoadCustomOverridesDistanceMatrix) {
 
 TEST_F(ConfigManagerJsonTest, LoadCustomThrowsForInvalidJson) {
   write_json("invalid.json", "{ not valid }");
-  EXPECT_THROW({
-    [[maybe_unused]] auto cfg = ConfigManager::load_custom(test_dir_ / "invalid.json");
-  }, ConfigurationError);
+  EXPECT_THROW(
+      {
+        [[maybe_unused]] auto cfg =
+            ConfigManager::load_custom(test_dir_ / "invalid.json");
+      },
+      ConfigurationError);
 }
 
 TEST_F(ConfigManagerJsonTest, LoadCustomThrowsForNonexistentFile) {
-  EXPECT_THROW({
-    [[maybe_unused]] auto cfg = ConfigManager::load_custom(test_dir_ / "nope.json");
-  }, ConfigurationError);
+  EXPECT_THROW(
+      {
+        [[maybe_unused]] auto cfg =
+            ConfigManager::load_custom(test_dir_ / "nope.json");
+      },
+      ConfigurationError);
 }
 
 TEST_F(ConfigManagerJsonTest, LoadCustomThrowsForInvalidConfig) {
@@ -140,9 +147,12 @@ TEST_F(ConfigManagerJsonTest, LoadCustomThrowsForInvalidConfig) {
       "right_hand": { "1-2": { "MinPrac": 100 } }
     }
   })");
-  EXPECT_THROW({
-    [[maybe_unused]] auto cfg = ConfigManager::load_custom(test_dir_ / "bad.json");
-  }, ConfigurationError);
+  EXPECT_THROW(
+      {
+        [[maybe_unused]] auto cfg =
+            ConfigManager::load_custom(test_dir_ / "bad.json");
+      },
+      ConfigurationError);
 }
 
 }  // namespace

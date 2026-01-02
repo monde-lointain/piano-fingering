@@ -1,4 +1,5 @@
 #include "config/preset.h"
+
 #include <gtest/gtest.h>
 
 namespace piano_fingering::config {

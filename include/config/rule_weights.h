@@ -1,6 +1,7 @@
 #ifndef PIANO_FINGERING_CONFIG_RULE_WEIGHTS_H_
 #define PIANO_FINGERING_CONFIG_RULE_WEIGHTS_H_
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 
@@ -12,10 +13,8 @@ struct RuleWeights {
   std::array<double, kRuleCount> values{};
 
   [[nodiscard]] constexpr bool is_valid() const noexcept {
-    for (const auto& w : values) {
-      if (w < 0.0) return false;
-    }
-    return true;
+    return std::all_of(values.begin(), values.end(),
+                       [](double w) { return w >= 0.0; });
   }
 
   [[nodiscard]] static constexpr RuleWeights defaults() noexcept {

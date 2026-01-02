@@ -3,6 +3,7 @@
 
 #include <string>
 #include <string_view>
+
 #include "config/config.h"
 
 namespace piano_fingering::config {

@@ -18,9 +18,11 @@ if(CPPCHECK_EXECUTABLE)
     COMMAND ${CPPCHECK_EXECUTABLE}
       --enable=all
       --suppress=missingIncludeSystem
+      --suppress=unusedFunction
       --inline-suppr
       --std=c++20
       --error-exitcode=1
+      -I${CMAKE_SOURCE_DIR}/include
       ${CPPCHECK_RULE_ARGS}
       ${CMAKE_SOURCE_DIR}/src
       ${CMAKE_SOURCE_DIR}/include
@@ -32,6 +34,7 @@ if(CPPCHECK_EXECUTABLE)
     COMMAND ${CPPCHECK_EXECUTABLE}
       --enable=all
       --suppress=missingIncludeSystem
+      --suppress=unusedFunction
       --inline-suppr
       --std=c++20
       --xml

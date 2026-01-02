@@ -1,5 +1,7 @@
 #include "config/configuration_error.h"
+
 #include <gtest/gtest.h>
+
 #include <stdexcept>
 
 namespace piano_fingering::config {

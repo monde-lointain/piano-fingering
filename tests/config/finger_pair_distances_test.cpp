@@ -1,4 +1,5 @@
 #include "config/finger_pair_distances.h"
+
 #include <gtest/gtest.h>
 
 namespace piano_fingering::config {
