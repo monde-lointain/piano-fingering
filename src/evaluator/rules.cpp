@@ -2,11 +2,13 @@
 
 #include <algorithm>
 #include <array>
+#include <optional>
 
 namespace piano_fingering::evaluator {
 
 using config::FingerPair;
 using domain::Finger;
+using domain::Hand;
 using domain::to_int;
 
 FingerPair finger_pair_from(Finger f1, Finger f2) {
@@ -116,6 +118,64 @@ double apply_rule_7(Finger f1, bool is_black1, Finger f2, bool is_black2) {
   bool ring_on_black =
       (f1 == Finger::kRing && is_black1) || (f2 == Finger::kRing && is_black2);
   return (middle_on_white && ring_on_black) ? 1.0 : 0.0;
+}
+
+double apply_rule_8(Finger f, bool is_black, std::optional<bool> prev_is_black,
+                    std::optional<bool> next_is_black) {
+  if (f != Finger::kThumb || !is_black) {
+    return 0.0;
+  }
+  double penalty = 0.5;
+  if (prev_is_black.has_value() && !*prev_is_black) {
+    penalty += 1.0;
+  }
+  if (next_is_black.has_value() && !*next_is_black) {
+    penalty += 1.0;
+  }
+  return penalty;
+}
+
+double apply_rule_9(Finger f, bool is_black, bool adj_is_black) {
+  if (f != Finger::kPinky || !is_black) {
+    return 0.0;
+  }
+  return adj_is_black ? 0.0 : 1.0;
+}
+
+bool is_crossing(Finger f1, int pitch1, Finger f2, int pitch2, Hand hand) {
+  bool f1_is_thumb = (f1 == Finger::kThumb);
+  bool f2_is_thumb = (f2 == Finger::kThumb);
+  // Must have exactly one thumb
+  if (f1_is_thumb == f2_is_thumb) {
+    return false;
+  }
+
+  int thumb_pitch = f1_is_thumb ? pitch1 : pitch2;
+  int other_pitch = f1_is_thumb ? pitch2 : pitch1;
+
+  if (hand == Hand::kRight) {
+    return thumb_pitch > other_pitch;  // Thumb higher = crossing
+  }
+  return thumb_pitch < other_pitch;  // Thumb lower = crossing
+}
+
+double apply_rule_10(bool is_crossing, bool note1_black, bool note2_black) {
+  if (!is_crossing) {
+    return 0.0;
+  }
+  return (note1_black == note2_black) ? 1.0 : 0.0;
+}
+
+double apply_rule_11([[maybe_unused]] int lower_pitch, bool lower_black,
+                     Finger lower_finger, [[maybe_unused]] int higher_pitch,
+                     bool higher_black, Finger higher_finger) {
+  // Rule 11: lower note white (non-thumb), higher note black (thumb)
+  bool lower_is_non_thumb = (lower_finger != Finger::kThumb);
+  bool higher_is_thumb = (higher_finger == Finger::kThumb);
+  if (!lower_is_non_thumb || !higher_is_thumb) {
+    return 0.0;
+  }
+  return (!lower_black && higher_black) ? 1.0 : 0.0;
 }
 
 }  // namespace piano_fingering::evaluator

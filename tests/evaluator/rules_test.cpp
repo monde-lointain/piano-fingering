@@ -2,10 +2,13 @@
 
 #include <gtest/gtest.h>
 
+#include <optional>
+
 #include "config/finger_pair.h"
 #include "config/finger_pair_distances.h"
 #include "config/rule_weights.h"
 #include "domain/finger.h"
+#include "domain/hand.h"
 
 namespace piano_fingering::evaluator {
 namespace {
@@ -14,6 +17,7 @@ using config::FingerPair;
 using config::FingerPairDistances;
 using config::RuleWeights;
 using domain::Finger;
+using domain::Hand;
 
 TEST(RulesTest, FingerPairFromAscending) {
   EXPECT_EQ(finger_pair_from(Finger::kThumb, Finger::kIndex),
@@ -105,6 +109,71 @@ TEST(RulesTest, Rule7ThirdWhiteFourthBlack) {
                    0.0);
   EXPECT_DOUBLE_EQ(apply_rule_7(Finger::kThumb, false, Finger::kIndex, true),
                    0.0);
+}
+
+TEST(RulesTest, Rule8ThumbOnBlack) {
+  EXPECT_DOUBLE_EQ(
+      apply_rule_8(Finger::kThumb, true, std::nullopt, std::nullopt), 0.5);
+  EXPECT_DOUBLE_EQ(
+      apply_rule_8(Finger::kThumb, false, std::nullopt, std::nullopt), 0.0);
+}
+
+TEST(RulesTest, Rule8AdjacentWhite) {
+  // Check BOTH prev and next (per confirmed design)
+  EXPECT_DOUBLE_EQ(apply_rule_8(Finger::kThumb, true, false, std::nullopt),
+                   1.5);
+  EXPECT_DOUBLE_EQ(apply_rule_8(Finger::kThumb, true, std::nullopt, false),
+                   1.5);
+  EXPECT_DOUBLE_EQ(apply_rule_8(Finger::kThumb, true, false, false),
+                   2.5);  // Both adjacent white
+  EXPECT_DOUBLE_EQ(apply_rule_8(Finger::kThumb, true, true, std::nullopt), 0.5);
+}
+
+TEST(RulesTest, Rule9FifthOnBlackAdjacentWhite) {
+  EXPECT_DOUBLE_EQ(apply_rule_9(Finger::kPinky, true, false), 1.0);
+  EXPECT_DOUBLE_EQ(apply_rule_9(Finger::kPinky, true, true), 0.0);
+  EXPECT_DOUBLE_EQ(apply_rule_9(Finger::kPinky, false, false), 0.0);
+}
+
+TEST(RulesTest, IsCrossingRightHand) {
+  // Right hand: thumb higher than non-thumb = crossing
+  EXPECT_TRUE(
+      is_crossing(Finger::kThumb, 65, Finger::kIndex, 60, Hand::kRight));
+  EXPECT_FALSE(
+      is_crossing(Finger::kThumb, 60, Finger::kIndex, 65, Hand::kRight));
+  // Both non-thumb: no crossing
+  EXPECT_FALSE(
+      is_crossing(Finger::kIndex, 60, Finger::kMiddle, 65, Hand::kRight));
+}
+
+TEST(RulesTest, IsCrossingLeftHand) {
+  // Left hand: thumb lower than non-thumb = crossing
+  EXPECT_TRUE(is_crossing(Finger::kThumb, 60, Finger::kIndex, 65, Hand::kLeft));
+  EXPECT_FALSE(
+      is_crossing(Finger::kThumb, 65, Finger::kIndex, 60, Hand::kLeft));
+}
+
+TEST(RulesTest, Rule10CrossingSameLevel) {
+  // Both white = same level
+  EXPECT_DOUBLE_EQ(apply_rule_10(true, false, false), 1.0);
+  // Both black = same level
+  EXPECT_DOUBLE_EQ(apply_rule_10(true, true, true), 1.0);
+  // Different levels
+  EXPECT_DOUBLE_EQ(apply_rule_10(true, false, true), 0.0);
+  // Not crossing
+  EXPECT_DOUBLE_EQ(apply_rule_10(false, false, false), 0.0);
+}
+
+TEST(RulesTest, Rule11ThumbBlackNonThumbWhite) {
+  // Lower pitch white (non-thumb), higher pitch black (thumb) = Rule 11
+  EXPECT_DOUBLE_EQ(
+      apply_rule_11(60, false, Finger::kIndex, 65, true, Finger::kThumb), 1.0);
+  // Thumb white: no penalty
+  EXPECT_DOUBLE_EQ(
+      apply_rule_11(60, false, Finger::kIndex, 65, false, Finger::kThumb), 0.0);
+  // Non-thumb black: no penalty
+  EXPECT_DOUBLE_EQ(
+      apply_rule_11(60, true, Finger::kIndex, 65, true, Finger::kThumb), 0.0);
 }
 
 }  // namespace
