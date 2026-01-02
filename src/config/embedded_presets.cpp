@@ -60,24 +60,24 @@ DistanceMatrix make_large_right_hand() {
 }  // namespace
 
 const Preset& get_small_preset() {
-  static const Preset preset{std::string(kPresetSmall),
-                             make_small_right_hand(),  // NOLINT
-                             make_small_right_hand(), RuleWeights::defaults()};
-  return preset;
+  static const Preset kPreset{std::string(kPresetSmall),
+                              make_small_right_hand(),  // NOLINT
+                              make_small_right_hand(), RuleWeights::defaults()};
+  return kPreset;
 }
 
 const Preset& get_medium_preset() {
-  static const Preset preset{std::string(kPresetMedium),  // NOLINT
-                             make_medium_left_hand(), make_medium_right_hand(),
-                             RuleWeights::defaults()};
-  return preset;
+  static const Preset kPreset{std::string(kPresetMedium),  // NOLINT
+                              make_medium_left_hand(), make_medium_right_hand(),
+                              RuleWeights::defaults()};
+  return kPreset;
 }
 
 const Preset& get_large_preset() {
-  static const Preset preset{std::string(kPresetLarge),
-                             make_large_right_hand(),  // NOLINT
-                             make_large_right_hand(), RuleWeights::defaults()};
-  return preset;
+  static const Preset kPreset{std::string(kPresetLarge),
+                              make_large_right_hand(),  // NOLINT
+                              make_large_right_hand(), RuleWeights::defaults()};
+  return kPreset;
 }
 
 }  // namespace piano_fingering::config
