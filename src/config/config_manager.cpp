@@ -62,6 +62,65 @@ void apply_distance_overrides(DistanceMatrix& matrix,
   }
 }
 
+void apply_algorithm_overrides(AlgorithmParameters& algo_params,
+                               const nlohmann::json& json) {
+  if (!json.contains("algorithm")) {
+    return;
+  }
+  const auto& algo = json["algorithm"];
+  if (algo.contains("beam_width")) {
+    algo_params.beam_width = algo["beam_width"].get<std::size_t>();
+  }
+  if (algo.contains("ils_iterations")) {
+    algo_params.ils_iterations = algo["ils_iterations"].get<std::size_t>();
+  }
+  if (algo.contains("perturbation_strength")) {
+    algo_params.perturbation_strength =
+        algo["perturbation_strength"].get<std::size_t>();
+  }
+}
+
+void apply_weights_overrides(RuleWeights& weights, const nlohmann::json& json) {
+  if (!json.contains("rule_weights") || !json["rule_weights"].is_array()) {
+    return;
+  }
+  const auto& weights_json = json["rule_weights"];
+  for (std::size_t i = 0; i < weights_json.size() && i < kRuleCount; ++i) {
+    if (!weights_json[i].is_null()) {
+      weights.values[i] = weights_json[i].get<double>();  // NOLINT
+    }
+  }
+}
+
+void apply_distance_matrix_overrides(Config& config,
+                                      const nlohmann::json& json) {
+  if (!json.contains("distance_matrix")) {
+    return;
+  }
+  const auto& dm = json["distance_matrix"];
+  if (dm.contains("left_hand")) {
+    apply_distance_overrides(config.left_hand, dm["left_hand"]);
+  }
+  if (dm.contains("right_hand")) {
+    apply_distance_overrides(config.right_hand, dm["right_hand"]);
+  }
+}
+
+nlohmann::json read_json_file(const std::filesystem::path& path) {
+  std::ifstream file(path);
+  if (!file) {
+    throw ConfigurationError("Cannot open file: " + path.string());
+  }
+
+  nlohmann::json json;
+  try {
+    file >> json;
+  } catch (const nlohmann::json::parse_error& e) {
+    throw ConfigurationError("JSON parse error: " + std::string(e.what()));
+  }
+  return json;
+}
+
 }  // namespace
 
 Config ConfigManager::load_preset(std::string_view name) {
@@ -83,55 +142,11 @@ Config ConfigManager::load_preset(std::string_view name) {
 Config ConfigManager::load_custom(const std::filesystem::path& path,
                                   std::string_view base_preset) {
   Config config = load_preset(base_preset);
+  nlohmann::json json = read_json_file(path);
 
-  std::ifstream file(path);
-  if (!file) {
-    throw ConfigurationError("Cannot open file: " + path.string());
-  }
-
-  nlohmann::json json;
-  try {
-    file >> json;
-  } catch (const nlohmann::json::parse_error& e) {
-    throw ConfigurationError("JSON parse error: " + std::string(e.what()));
-  }
-
-  // Apply algorithm overrides
-  if (json.contains("algorithm")) {
-    const auto& algo = json["algorithm"];
-    if (algo.contains("beam_width")) {
-      config.algorithm.beam_width = algo["beam_width"].get<std::size_t>();
-    }
-    if (algo.contains("ils_iterations")) {
-      config.algorithm.ils_iterations =
-          algo["ils_iterations"].get<std::size_t>();
-    }
-    if (algo.contains("perturbation_strength")) {
-      config.algorithm.perturbation_strength =
-          algo["perturbation_strength"].get<std::size_t>();
-    }
-  }
-
-  // Apply rule_weights overrides (null = keep default)
-  if (json.contains("rule_weights") && json["rule_weights"].is_array()) {
-    const auto& weights = json["rule_weights"];
-    for (std::size_t i = 0; i < weights.size() && i < kRuleCount; ++i) {
-      if (!weights[i].is_null()) {
-        config.weights.values[i] = weights[i].get<double>();  // NOLINT
-      }
-    }
-  }
-
-  // Apply distance_matrix overrides
-  if (json.contains("distance_matrix")) {
-    const auto& dm = json["distance_matrix"];
-    if (dm.contains("left_hand")) {
-      apply_distance_overrides(config.left_hand, dm["left_hand"]);
-    }
-    if (dm.contains("right_hand")) {
-      apply_distance_overrides(config.right_hand, dm["right_hand"]);
-    }
-  }
+  apply_algorithm_overrides(config.algorithm, json);
+  apply_weights_overrides(config.weights, json);
+  apply_distance_matrix_overrides(config, json);
 
   std::string error;
   if (!validate(config, error)) {
