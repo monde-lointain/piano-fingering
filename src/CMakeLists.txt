@@ -3,6 +3,7 @@
 # Config library
 add_library(config STATIC
   config/embedded_presets.cpp
+  config/config_manager.cpp
 )
 
 target_include_directories(config
