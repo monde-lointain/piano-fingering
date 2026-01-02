@@ -41,6 +41,21 @@ namespace piano_fingering::evaluator {
                                    int higher_pitch, bool higher_black,
                                    domain::Finger higher_finger);
 
+[[nodiscard]] bool is_monotonic(int p1, int p2, int p3);
+
+[[nodiscard]] double apply_rule_3(const config::FingerPairDistances& d, int p1,
+                                  int p2, int p3, domain::Finger f1,
+                                  domain::Finger f2, domain::Finger f3);
+
+[[nodiscard]] double apply_rule_4(const config::FingerPairDistances& d,
+                                  int span);
+
+[[nodiscard]] double apply_rule_12(int p1, int p2, int p3, domain::Finger f1,
+                                   domain::Finger f2, domain::Finger f3);
+
+[[nodiscard]] double apply_rule_15(domain::Finger f1, domain::Finger f2,
+                                   int pitch1, int pitch2);
+
 }  // namespace piano_fingering::evaluator
 
 #endif  // PIANO_FINGERING_EVALUATOR_RULES_H_

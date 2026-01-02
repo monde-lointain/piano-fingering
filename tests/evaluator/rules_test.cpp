@@ -176,5 +176,102 @@ TEST(RulesTest, Rule11ThumbBlackNonThumbWhite) {
       apply_rule_11(60, true, Finger::kIndex, 65, true, Finger::kThumb), 0.0);
 }
 
+TEST(RulesTest, IsMonotonicAscending) {
+  EXPECT_TRUE(is_monotonic(60, 62, 64));   // p1 < p2 < p3
+  EXPECT_FALSE(is_monotonic(60, 64, 62));  // p2 not between
+  EXPECT_FALSE(is_monotonic(60, 60, 64));  // p1 == p2
+}
+
+TEST(RulesTest, IsMonotonicDescending) {
+  EXPECT_TRUE(is_monotonic(64, 62, 60));   // p1 > p2 > p3
+  EXPECT_FALSE(is_monotonic(64, 60, 62));  // p2 not between
+}
+
+TEST(RulesTest, Rule3BaseOnly) {
+  FingerPairDistances d{-8, -6, 1, 5, 8, 10};
+  // Span 9 exceeds MaxComf(8) but within MaxPrac(10), not monotonic
+  // Base penalty only: +1
+  EXPECT_DOUBLE_EQ(apply_rule_3(d, 60, 65, 69, Finger::kIndex, Finger::kThumb,
+                                Finger::kMiddle),
+                   1.0);
+}
+
+TEST(RulesTest, Rule3FullChange) {
+  FingerPairDistances d{-8, -6, 1, 5, 8, 10};
+  // Span 12 exceeds MaxPrac(10), monotonic (60 < 64 < 72), f2 = thumb
+  // Base (+1) + Full change (+1) = 2
+  EXPECT_DOUBLE_EQ(apply_rule_3(d, 60, 64, 72, Finger::kIndex, Finger::kThumb,
+                                Finger::kMiddle),
+                   2.0);
+}
+
+TEST(RulesTest, Rule3HalfChangeNotThumb) {
+  FingerPairDistances d{-8, -6, 1, 5, 8, 10};
+  // Span 12 exceeds MaxPrac, monotonic, but f2 != thumb
+  // Base (+1) only (not full change)
+  EXPECT_DOUBLE_EQ(apply_rule_3(d, 60, 64, 72, Finger::kIndex, Finger::kMiddle,
+                                Finger::kPinky),
+                   1.0);
+}
+
+TEST(RulesTest, Rule3Substitution) {
+  FingerPairDistances d{-8, -6, 1, 5, 8, 10};
+  // Span 0 (same pitch), different fingers: Substitution (+1)
+  // No base penalty (within comfort)
+  EXPECT_DOUBLE_EQ(apply_rule_3(d, 60, 64, 60, Finger::kIndex, Finger::kThumb,
+                                Finger::kMiddle),
+                   1.0);
+}
+
+TEST(RulesTest, Rule3BaseAndSubstitution) {
+  FingerPairDistances d{-8, -6, 1, 5, 8, 10};
+  // p1 == p3 but span calculation may still exceed comfort in edge cases
+  // This tests same pitch with different fingers
+  EXPECT_DOUBLE_EQ(apply_rule_3(d, 60, 64, 60, Finger::kThumb, Finger::kIndex,
+                                Finger::kMiddle),
+                   1.0);
+}
+
+TEST(RulesTest, Rule3NoPenalty) {
+  FingerPairDistances d{-8, -6, 1, 5, 8, 10};
+  // Span 4 within comfort, same finger f1==f3, not substitution
+  EXPECT_DOUBLE_EQ(apply_rule_3(d, 60, 62, 64, Finger::kThumb, Finger::kIndex,
+                                Finger::kThumb),
+                   0.0);
+}
+
+TEST(RulesTest, Rule4TripletSpanExceedsComfort) {
+  FingerPairDistances d{-8, -6, 1, 5, 8, 10};
+  EXPECT_DOUBLE_EQ(apply_rule_4(d, 5), 0.0);   // Within comfort
+  EXPECT_DOUBLE_EQ(apply_rule_4(d, 9), 1.0);   // Exceeds by 1
+  EXPECT_DOUBLE_EQ(apply_rule_4(d, 12), 4.0);  // Exceeds by 4
+}
+
+TEST(RulesTest, Rule12SameFingerReuse) {
+  // Rule 12: Different first and third note, same finger, second pitch is
+  // middle
+  EXPECT_DOUBLE_EQ(
+      apply_rule_12(60, 64, 68, Finger::kIndex, Finger::kThumb, Finger::kIndex),
+      1.0);
+  // Same pitch: no penalty
+  EXPECT_DOUBLE_EQ(
+      apply_rule_12(60, 64, 60, Finger::kIndex, Finger::kThumb, Finger::kIndex),
+      0.0);
+  // Different fingers: no penalty
+  EXPECT_DOUBLE_EQ(apply_rule_12(60, 64, 68, Finger::kIndex, Finger::kThumb,
+                                 Finger::kMiddle),
+                   0.0);
+  // Not monotonic: no penalty
+  EXPECT_DOUBLE_EQ(
+      apply_rule_12(60, 70, 65, Finger::kIndex, Finger::kThumb, Finger::kIndex),
+      0.0);
+}
+
+TEST(RulesTest, Rule15SamePitchDifferentFinger) {
+  EXPECT_DOUBLE_EQ(apply_rule_15(Finger::kThumb, Finger::kIndex, 60, 60), 1.0);
+  EXPECT_DOUBLE_EQ(apply_rule_15(Finger::kThumb, Finger::kThumb, 60, 60), 0.0);
+  EXPECT_DOUBLE_EQ(apply_rule_15(Finger::kThumb, Finger::kIndex, 60, 62), 0.0);
+}
+
 }  // namespace
 }  // namespace piano_fingering::evaluator
