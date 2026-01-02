@@ -93,7 +93,7 @@ void apply_weights_overrides(RuleWeights& weights, const nlohmann::json& json) {
 }
 
 void apply_distance_matrix_overrides(Config& config,
-                                      const nlohmann::json& json) {
+                                     const nlohmann::json& json) {
   if (!json.contains("distance_matrix")) {
     return;
   }
