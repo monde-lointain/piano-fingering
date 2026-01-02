@@ -21,6 +21,41 @@ std::string to_lower(std::string_view str) {
   return result;
 }
 
+FingerPair finger_pair_from_string(const std::string& str) {
+  static const std::unordered_map<std::string, FingerPair> mapping = {
+      {"1-2", FingerPair::kThumbIndex},
+      {"1-3", FingerPair::kThumbMiddle},
+      {"1-4", FingerPair::kThumbRing},
+      {"1-5", FingerPair::kThumbPinky},
+      {"2-3", FingerPair::kIndexMiddle},
+      {"2-4", FingerPair::kIndexRing},
+      {"2-5", FingerPair::kIndexPinky},
+      {"3-4", FingerPair::kMiddleRing},
+      {"3-5", FingerPair::kMiddlePinky},
+      {"4-5", FingerPair::kRingPinky},
+  };
+  auto it = mapping.find(str);
+  if (it == mapping.end()) {
+    throw ConfigurationError("Unknown finger pair: " + str);
+  }
+  return it->second;
+}
+
+void apply_distance_overrides(DistanceMatrix& matrix,
+                              const nlohmann::json& json) {
+  for (const auto& [pair_str, values] : json.items()) {
+    FingerPair pair = finger_pair_from_string(pair_str);
+    auto& d = matrix.get_pair(pair);
+
+    if (values.contains("MinPrac")) d.min_prac = values["MinPrac"].get<int>();
+    if (values.contains("MinComf")) d.min_comf = values["MinComf"].get<int>();
+    if (values.contains("MinRel")) d.min_rel = values["MinRel"].get<int>();
+    if (values.contains("MaxRel")) d.max_rel = values["MaxRel"].get<int>();
+    if (values.contains("MaxComf")) d.max_comf = values["MaxComf"].get<int>();
+    if (values.contains("MaxPrac")) d.max_prac = values["MaxPrac"].get<int>();
+  }
+}
+
 }  // namespace
 
 Config ConfigManager::load_preset(std::string_view name) {
@@ -39,10 +74,59 @@ Config ConfigManager::load_preset(std::string_view name) {
   throw ConfigurationError("Unknown preset: " + std::string(name));
 }
 
-Config ConfigManager::load_custom(const std::filesystem::path& /*path*/,
-                                  std::string_view /*base_preset*/) {
-  // Implemented in Task 10
-  throw ConfigurationError("Not implemented");
+Config ConfigManager::load_custom(const std::filesystem::path& path,
+                                  std::string_view base_preset) {
+  Config config = load_preset(base_preset);
+
+  std::ifstream file(path);
+  if (!file) {
+    throw ConfigurationError("Cannot open file: " + path.string());
+  }
+
+  nlohmann::json json;
+  try {
+    file >> json;
+  } catch (const nlohmann::json::parse_error& e) {
+    throw ConfigurationError("JSON parse error: " + std::string(e.what()));
+  }
+
+  // Apply algorithm overrides
+  if (json.contains("algorithm")) {
+    const auto& algo = json["algorithm"];
+    if (algo.contains("beam_width"))
+      config.algorithm.beam_width = algo["beam_width"].get<std::size_t>();
+    if (algo.contains("ils_iterations"))
+      config.algorithm.ils_iterations = algo["ils_iterations"].get<std::size_t>();
+    if (algo.contains("perturbation_strength"))
+      config.algorithm.perturbation_strength =
+          algo["perturbation_strength"].get<std::size_t>();
+  }
+
+  // Apply rule_weights overrides (null = keep default)
+  if (json.contains("rule_weights") && json["rule_weights"].is_array()) {
+    const auto& weights = json["rule_weights"];
+    for (std::size_t i = 0; i < weights.size() && i < kRuleCount; ++i) {
+      if (!weights[i].is_null()) {
+        config.weights.values[i] = weights[i].get<double>();
+      }
+    }
+  }
+
+  // Apply distance_matrix overrides
+  if (json.contains("distance_matrix")) {
+    const auto& dm = json["distance_matrix"];
+    if (dm.contains("left_hand"))
+      apply_distance_overrides(config.left_hand, dm["left_hand"]);
+    if (dm.contains("right_hand"))
+      apply_distance_overrides(config.right_hand, dm["right_hand"]);
+  }
+
+  std::string error;
+  if (!validate(config, error)) {
+    throw ConfigurationError("Invalid configuration: " + error);
+  }
+
+  return config;
 }
 
 bool ConfigManager::validate(const Config& config, std::string& error_message) {
