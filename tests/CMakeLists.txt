@@ -37,6 +37,7 @@ gtest_discover_tests(domain_test)
 # Config module tests
 add_executable(config_test
   config/finger_pair_test.cpp
+  config/configuration_error_test.cpp
 )
 target_include_directories(config_test
   PRIVATE ${CMAKE_SOURCE_DIR}/include
