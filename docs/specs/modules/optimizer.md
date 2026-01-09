@@ -355,8 +355,9 @@ void Optimizer::ils_improve(Fingering& fingering, const Piece& piece, Hand hand,
             continue;
           }
 
-          // Delta evaluation
-          double delta = evaluator_.evaluate_delta(piece, fingering, candidate, note_idx, hand);
+          // Delta evaluation using SliceLocation
+          ScoreEvaluator::SliceLocation location = compute_location(note_idx);  // Helper to compute location
+          double delta = evaluator_.evaluate_delta(piece, fingering, candidate, location, hand);
           double new_cost = best_cost + delta;
 
           if (new_cost < best_cost) {
@@ -506,9 +507,10 @@ Result Optimizer::optimize(const Piece& piece, Hand hand, unsigned int seed) {
 ## Performance Optimizations
 
 1. **Parallel ILS trajectories**: Linear speedup with cores
-2. **Delta evaluation in ILS**: O(1) instead of O(N) per swap
+2. **Delta evaluation in ILS**: O(S) amortized instead of O(N) full re-evaluation per swap
 3. **Beam pruning with partial_sort**: O(K log K) instead of full sort
 4. **Precomputed state generation**: Cache valid fingerings per chord size
+5. **Evaluator caching**: Each trajectory maintains evaluator cache for efficient deltas
 
 ---
 

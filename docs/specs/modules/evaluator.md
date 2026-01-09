@@ -23,9 +23,13 @@
 
 | Data | Type | Description |
 |------|------|-------------|
-| `piece_` | `const Piece&` | Musical structure being evaluated |
-| `fingering_` | `const Fingering&` | Current finger assignments |
-| `config_` | `const Config&` | Distance matrix + rule weights |
+| `config_` | `const Config*` | Distance matrix + rule weights |
+| `cache_` | `mutable std::unique_ptr<CacheData>` | PIMPL storing note vectors for delta evaluation |
+
+**CacheData** (implementation detail):
+- `std::vector<NoteInfo> notes` - Cached note vector from last evaluate()
+- `size_t fingerings_size` - Validation that cached notes match current fingerings size
+- `Hand hand` - Validation that cached notes match current hand
 
 ---
 
@@ -36,38 +40,44 @@
 ```cpp
 class ScoreEvaluator {
 public:
+  struct SliceLocation {
+    size_t measure_idx;
+    size_t slice_idx;
+    size_t note_idx_in_slice;
+    size_t fingering_idx;
+  };
+
   explicit ScoreEvaluator(const Config& cfg);
 
-  // Full evaluation (used in Beam Search initial pass)
-  double evaluate(const Piece& piece, const Fingering& fingering, Hand hand) const;
+  ~ScoreEvaluator();  // Needed for unique_ptr<CacheData>
 
-  // Delta evaluation (used in ILS for incremental updates)
-  double evaluate_delta(
+  // Move-only for PIMPL pattern
+  ScoreEvaluator(ScoreEvaluator&&) noexcept;
+  ScoreEvaluator& operator=(ScoreEvaluator&&) noexcept;
+
+  // Full evaluation (used in Beam Search initial pass)
+  // Also populates internal cache for efficient delta evaluation
+  double evaluate(
     const Piece& piece,
-    const Fingering& old_fingering,
-    const Fingering& new_fingering,
-    size_t changed_note_idx,
+    const std::vector<Fingering>& fingerings,
     Hand hand
   ) const;
 
-  // Hard constraint check
-  bool violates_hard_constraint(const Slice& slice, const Fingering& fingering) const;
+  // Delta evaluation (used in ILS for incremental updates)
+  // Reuses cached note vectors from prior evaluate() call for O(S) amortized performance
+  double evaluate_delta(
+    const Piece& piece,
+    const std::vector<Fingering>& current_fingerings,
+    const std::vector<Fingering>& proposed_fingerings,
+    const SliceLocation& changed_location,
+    Hand hand
+  ) const;
 
 private:
-  Config config_;
+  const Config* config_;
 
-  // Rule implementations (15 functions)
-  double rule1_comfort_distance(const Note& n1, Finger f1, const Note& n2, Finger f2) const;
-  double rule2_relaxed_distance(const Note& n1, Finger f1, const Note& n2, Finger f2) const;
-  // ... rules 3-15
-  double rule13_practical_distance(const Note& n1, Finger f1, const Note& n2, Finger f2) const;
-  double rule14_chord_constraints(const Slice& slice, const Fingering& fingering) const;
-  double rule15_same_pitch_different_finger(const Slice& s1, const Slice& s2,
-                                             const Fingering& f1, const Fingering& f2) const;
-
-  // Utilities
-  int compute_distance(const Note& n1, const Note& n2) const;
-  bool is_black_key(const Note& note) const;
+  struct CacheData;  // PIMPL - stores note vectors for delta evaluation
+  mutable std::unique_ptr<CacheData> cache_;
 };
 ```
 
@@ -300,10 +310,12 @@ TEST(EvaluatorIntegrationTest, MatchPythonScorerOnGoldenSet) {
 
 ## Design Constraints
 
-1. **No mutation**: Evaluator is stateless except for config
-2. **Thread-safe**: Can be called from multiple ILS trajectories concurrently
+1. **Logical const-correctness**: Evaluator is logically const; internal cache is mutable for performance
+2. **NOT thread-safe**: Mutable cache requires separate evaluator instance per thread
 3. **Performance-critical**: Profile-guided optimization needed (hot path in ILS)
 4. **Cascading rules MUST accumulate**: Rules 1, 2, 13 are additive, not max
+5. **Cache invalidation**: evaluate() must be called before evaluate_delta() for correct cache state
+6. **Move-only**: Uses PIMPL pattern with unique_ptr, not copyable
 
 ---
 
@@ -311,14 +323,14 @@ TEST(EvaluatorIntegrationTest, MatchPythonScorerOnGoldenSet) {
 
 ```
 include/evaluator/
-  score_evaluator.h        // Public API
-  rules.h                  // Individual rule functions
-  cascading_distance.h     // Rules 1, 2, 13 combined logic
+  score_evaluator.h        // Public API with SliceLocation and PIMPL
+  rules.h                  // Individual rule functions (free functions)
 src/evaluator/
-  score_evaluator.cpp      // Orchestration + full evaluation
-  rules.cpp                // Rule implementations (15 functions)
-  cascading_distance.cpp
+  score_evaluator.cpp      // Orchestration, caching, delta evaluation
+  rules.cpp                // Rule implementations (15 functions + cascading helpers)
 ```
+
+**Note:** Cascading logic is inline in rules.cpp, not separate file
 
 ---
 
@@ -373,12 +385,15 @@ double ScoreEvaluator::evaluate_distance_with_cascading(
 ```cpp
 double ScoreEvaluator::evaluate_delta(
   const Piece& piece,
-  const Fingering& old_fingering,
-  const Fingering& new_fingering,
-  size_t changed_note_idx,
+  const std::vector<Fingering>& current_fingerings,
+  const std::vector<Fingering>& proposed_fingerings,
+  const SliceLocation& changed_location,
   Hand hand
 ) const {
-  // Only recompute rules affected by the changed note
+  // Reuse cached old_notes from prior evaluate() call
+  // Build new_notes vector for proposed fingerings
+  // Only recompute rules affected by the changed note at changed_location
+
   // Rules affected:
   // - Inter-slice (1,2,5-13,15): Previous and next slices
   // - Intra-slice (14): Current slice if it's a chord
@@ -386,17 +401,22 @@ double ScoreEvaluator::evaluate_delta(
 
   double delta = 0.0;
 
+  // Use SliceLocation to directly address changed note (O(1) access)
   // Remove old penalties involving changed note
-  delta -= compute_local_penalties(old_fingering, changed_note_idx);
+  delta -= compute_local_penalties(old_notes, changed_location);
 
   // Add new penalties involving changed note
-  delta += compute_local_penalties(new_fingering, changed_note_idx);
+  delta += compute_local_penalties(new_notes, changed_location);
 
   return delta;
 }
 ```
 
-**Complexity:** O(1) for simple swaps, O(M) for chord notes (M ≤ 5)
+**Complexity:**
+- O(S) per call where S = total slices (for building note vectors)
+- O(S) amortized when preceded by evaluate() call (reuses cached old_notes)
+- Effectively O(1) per-note work for local penalty computation
+- 10-100x faster than full O(N) re-evaluation for typical pieces
 
 ---
 
