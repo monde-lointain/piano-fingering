@@ -247,6 +247,13 @@ TEST(RulesTest, Rule4TripletSpanExceedsComfort) {
   EXPECT_DOUBLE_EQ(apply_rule_4(d, 12), 4.0);  // Exceeds by 4
 }
 
+TEST(RulesTest, Rule4TripletSpanContracted) {
+  FingerPairDistances d{-8, -6, 1, 5, 8, 10};
+  EXPECT_DOUBLE_EQ(apply_rule_4(d, -6), 0.0);   // At min_comf boundary
+  EXPECT_DOUBLE_EQ(apply_rule_4(d, -7), 1.0);   // Below by 1: -6 - (-7) = 1
+  EXPECT_DOUBLE_EQ(apply_rule_4(d, -10), 4.0);  // Below by 4: -6 - (-10) = 4
+}
+
 TEST(RulesTest, Rule12SameFingerReuse) {
   // Rule 12: Different first and third note, same finger, second pitch is
   // middle
