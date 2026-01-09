@@ -218,12 +218,126 @@ TEST(ScoreEvaluatorTest, EvaluateDeltaReturnsScoreDifference) {
   std::vector<Fingering> current = {Fingering({Finger::kThumb}),
                                     Fingering({Finger::kIndex})};
 
-  // Proposed: thumb -> middle
+  // Proposed: thumb -> middle (change at index 1)
   std::vector<Fingering> proposed = {Fingering({Finger::kThumb}),
                                      Fingering({Finger::kMiddle})};
 
   double delta =
-      evaluator.evaluate_delta(piece, current, proposed, Hand::kRight);
+      evaluator.evaluate_delta(piece, current, proposed, 1, Hand::kRight);
+  double old_score = evaluator.evaluate(piece, current, Hand::kRight);
+  double new_score = evaluator.evaluate(piece, proposed, Hand::kRight);
+
+  EXPECT_DOUBLE_EQ(delta, new_score - old_score);
+}
+
+TEST(ScoreEvaluatorTest, EvaluateDeltaWithChangedMiddleNote) {
+  Config config{};
+  config.right_hand = make_medium_right();
+  config.weights = config::RuleWeights::defaults();
+  ScoreEvaluator evaluator(config);
+
+  // Three notes to test middle change
+  Piece piece(Metadata("Test", "Composer"), {},
+              {Measure(1,
+                       {Slice({make_note(0, 4)}), Slice({make_note(2, 4)}),
+                        Slice({make_note(4, 4)})},
+                       TimeSignature(4, 4))});
+
+  // Current: 1-2-3
+  std::vector<Fingering> current = {Fingering({Finger::kThumb}),
+                                    Fingering({Finger::kIndex}),
+                                    Fingering({Finger::kMiddle})};
+
+  // Proposed: 1-4-3 (change middle note at index 1)
+  std::vector<Fingering> proposed = {Fingering({Finger::kThumb}),
+                                     Fingering({Finger::kRing}),
+                                     Fingering({Finger::kMiddle})};
+
+  double delta =
+      evaluator.evaluate_delta(piece, current, proposed, 1, Hand::kRight);
+  double old_score = evaluator.evaluate(piece, current, Hand::kRight);
+  double new_score = evaluator.evaluate(piece, proposed, Hand::kRight);
+
+  EXPECT_DOUBLE_EQ(delta, new_score - old_score);
+}
+
+TEST(ScoreEvaluatorTest, EvaluateDeltaWithFirstNoteChange) {
+  Config config{};
+  config.right_hand = make_medium_right();
+  config.weights = config::RuleWeights::defaults();
+  ScoreEvaluator evaluator(config);
+
+  // Two notes
+  Piece piece(Metadata("Test", "Composer"), {},
+              {Measure(1, {Slice({make_note(0, 4)}), Slice({make_note(2, 4)})},
+                       TimeSignature(4, 4))});
+
+  // Current: 1-2
+  std::vector<Fingering> current = {Fingering({Finger::kThumb}),
+                                    Fingering({Finger::kIndex})};
+
+  // Proposed: 2-2 (change first note at index 0)
+  std::vector<Fingering> proposed = {Fingering({Finger::kIndex}),
+                                     Fingering({Finger::kIndex})};
+
+  double delta =
+      evaluator.evaluate_delta(piece, current, proposed, 0, Hand::kRight);
+  double old_score = evaluator.evaluate(piece, current, Hand::kRight);
+  double new_score = evaluator.evaluate(piece, proposed, Hand::kRight);
+
+  EXPECT_DOUBLE_EQ(delta, new_score - old_score);
+}
+
+TEST(ScoreEvaluatorTest, EvaluateDeltaWithLastNoteChange) {
+  Config config{};
+  config.right_hand = make_medium_right();
+  config.weights = config::RuleWeights::defaults();
+  ScoreEvaluator evaluator(config);
+
+  // Two notes
+  Piece piece(Metadata("Test", "Composer"), {},
+              {Measure(1, {Slice({make_note(0, 4)}), Slice({make_note(2, 4)})},
+                       TimeSignature(4, 4))});
+
+  // Current: 1-2
+  std::vector<Fingering> current = {Fingering({Finger::kThumb}),
+                                    Fingering({Finger::kIndex})};
+
+  // Proposed: 1-3 (change last note at index 1)
+  std::vector<Fingering> proposed = {Fingering({Finger::kThumb}),
+                                     Fingering({Finger::kMiddle})};
+
+  double delta =
+      evaluator.evaluate_delta(piece, current, proposed, 1, Hand::kRight);
+  double old_score = evaluator.evaluate(piece, current, Hand::kRight);
+  double new_score = evaluator.evaluate(piece, proposed, Hand::kRight);
+
+  EXPECT_DOUBLE_EQ(delta, new_score - old_score);
+}
+
+TEST(ScoreEvaluatorTest, EvaluateDeltaWithChordChange) {
+  Config config{};
+  config.right_hand = make_medium_right();
+  config.weights = config::RuleWeights::defaults();
+  ScoreEvaluator evaluator(config);
+
+  // Chord followed by single note
+  Piece piece(
+      Metadata("Test", "Composer"), {},
+      {Measure(1,
+               {Slice({make_note(0, 4), make_note(4, 4)}), Slice({make_note(7, 4)})},
+               TimeSignature(4, 4))});
+
+  // Current: chord 1-3, then 5
+  std::vector<Fingering> current = {
+      Fingering({Finger::kThumb, Finger::kMiddle}), Fingering({Finger::kPinky})};
+
+  // Proposed: chord 1-2, then 5 (change second note in chord at index 1)
+  std::vector<Fingering> proposed = {
+      Fingering({Finger::kThumb, Finger::kIndex}), Fingering({Finger::kPinky})};
+
+  double delta =
+      evaluator.evaluate_delta(piece, current, proposed, 1, Hand::kRight);
   double old_score = evaluator.evaluate(piece, current, Hand::kRight);
   double new_score = evaluator.evaluate(piece, proposed, Hand::kRight);
 

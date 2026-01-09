@@ -265,10 +265,175 @@ double ScoreEvaluator::evaluate_delta(
     const domain::Piece& piece,
     const std::vector<domain::Fingering>& current_fingerings,
     const std::vector<domain::Fingering>& proposed_fingerings,
+    size_t changed_note_idx,
     domain::Hand hand) const {
-  double new_score = evaluate(piece, proposed_fingerings, hand);
-  double old_score = evaluate(piece, current_fingerings, hand);
-  return new_score - old_score;
+  const auto& distances =
+      (hand == domain::Hand::kLeft) ? config_->left_hand : config_->right_hand;
+  const auto& weights = config_->weights;
+  const auto& measures =
+      (hand == domain::Hand::kLeft) ? piece.left_hand() : piece.right_hand();
+
+  // Collect note info for both fingerings
+  auto old_notes = collect_notes(measures, current_fingerings);
+  auto new_notes = collect_notes(measures, proposed_fingerings);
+
+  if (old_notes.size() != new_notes.size() || old_notes.empty()) {
+    // Fallback to full evaluation if structure differs
+    double new_score = evaluate(piece, proposed_fingerings, hand);
+    double old_score = evaluate(piece, current_fingerings, hand);
+    return new_score - old_score;
+  }
+
+  if (changed_note_idx >= old_notes.size()) {
+    return 0.0;  // Invalid index
+  }
+
+  double delta = 0.0;
+
+  // Compute old penalties for affected rules
+  double old_penalty = 0.0;
+  double new_penalty = 0.0;
+
+  // Helper to apply two-note rules between notes at indices i and i+1
+  auto apply_pair_rules = [&](const std::vector<NoteInfo>& notes, size_t i,
+                              bool include_rule5_n1, bool include_rule5_n2) {
+    if (i + 1 >= notes.size()) {
+      return 0.0;
+    }
+    const auto& n1 = notes[i];
+    const auto& n2 = notes[i + 1];
+    double penalty = 0.0;
+
+    // Rule 5
+    if (include_rule5_n1) {
+      penalty += apply_rule_5(n1.finger);
+    }
+    if (include_rule5_n2) {
+      penalty += apply_rule_5(n2.finger);
+    }
+
+    // Rules 6-11, cascading penalty
+    penalty += apply_rule_6(n1.finger, n2.finger);
+    penalty += apply_rule_7(n1.finger, n1.is_black, n2.finger, n2.is_black);
+
+    std::optional<bool> prev_black =
+        (i > 0) ? std::optional<bool>(notes[i - 1].is_black) : std::nullopt;
+    std::optional<bool> next_black =
+        (i + 1 < notes.size()) ? std::optional<bool>(n2.is_black) : std::nullopt;
+    penalty += apply_rule_8(n1.finger, n1.is_black, prev_black, next_black);
+
+    penalty += apply_rule_9(n1.finger, n1.is_black, n2.is_black);
+    penalty += apply_rule_9(n2.finger, n2.is_black, n1.is_black);
+
+    bool crossing = is_crossing(n1.finger, n1.pitch, n2.finger, n2.pitch, hand);
+    penalty += apply_rule_10(crossing, n1.is_black, n2.is_black);
+
+    auto params = compute_rule11_params(n1, n2);
+    penalty += apply_rule_11(params.lower_pitch, params.lower_black,
+                             params.lower_finger, params.higher_pitch,
+                             params.higher_black, params.higher_finger);
+
+    const auto& pair_distances =
+        distances.get_pair(finger_pair_from(n1.finger, n2.finger));
+    int actual_distance = n2.pitch - n1.pitch;
+    penalty += apply_cascading_penalty(pair_distances, actual_distance, weights);
+
+    return penalty;
+  };
+
+  // Rule 5: apply to changed note
+  old_penalty += apply_rule_5(old_notes[changed_note_idx].finger);
+  new_penalty += apply_rule_5(new_notes[changed_note_idx].finger);
+
+  // For the pair [i-1, i] (prev note to changed note):
+  if (changed_note_idx > 0) {
+    size_t i = changed_note_idx - 1;
+    // Don't apply Rule 5 (already applied separately above)
+    old_penalty += apply_pair_rules(old_notes, i, false, false);
+    new_penalty += apply_pair_rules(new_notes, i, false, false);
+  }
+
+  // For the pair [i, i+1] (changed note to next note):
+  if (changed_note_idx + 1 < old_notes.size()) {
+    size_t i = changed_note_idx;
+    // Don't apply Rule 5 to changed note (already applied)
+    // Don't apply Rule 5 to next note (unchanged, so penalty unchanged)
+    old_penalty += apply_pair_rules(old_notes, i, false, false);
+    new_penalty += apply_pair_rules(new_notes, i, false, false);
+  }
+
+  // Three-note rules: check triplets involving changed note
+  // Triplet [i-1, i, i+1]
+  if (changed_note_idx > 0 && changed_note_idx + 1 < old_notes.size()) {
+    size_t i = changed_note_idx - 1;
+    old_penalty += apply_three_note_rules(old_notes, i, distances);
+    new_penalty += apply_three_note_rules(new_notes, i, distances);
+  }
+
+  // Triplet [i, i+1, i+2]
+  if (changed_note_idx + 2 < old_notes.size()) {
+    size_t i = changed_note_idx;
+    old_penalty += apply_three_note_rules(old_notes, i, distances);
+    new_penalty += apply_three_note_rules(new_notes, i, distances);
+  }
+
+  // Triplet [i-2, i-1, i]
+  if (changed_note_idx >= 2) {
+    size_t i = changed_note_idx - 2;
+    old_penalty += apply_three_note_rules(old_notes, i, distances);
+    new_penalty += apply_three_note_rules(new_notes, i, distances);
+  }
+
+  // Chord rules (Rule 14): if changed slice is a chord
+  // Need to find which slice corresponds to changed_note_idx
+  size_t fingering_idx = 0;
+  size_t note_count = 0;
+  for (const auto& measure : measures) {
+    for (const auto& slice : measure) {
+      if (slice.empty()) {
+        continue;
+      }
+
+      bool has_non_rest =
+          std::any_of(slice.begin(), slice.end(),
+                      [](const auto& note) { return !note.is_rest(); });
+      if (!has_non_rest) {
+        continue;
+      }
+
+      if (fingering_idx >= current_fingerings.size()) {
+        break;
+      }
+
+      // Count notes in this slice
+      size_t slice_note_count = 0;
+      for (const auto& note : slice) {
+        if (!note.is_rest()) {
+          ++slice_note_count;
+        }
+      }
+
+      // Check if changed_note_idx falls within this slice
+      if (changed_note_idx >= note_count &&
+          changed_note_idx < note_count + slice_note_count) {
+        // This slice contains the changed note
+        if (slice.size() > 1) {
+          // It's a chord, recompute penalties
+          old_penalty += process_chord_slice(slice, current_fingerings[fingering_idx],
+                                             distances, weights);
+          new_penalty += process_chord_slice(slice, proposed_fingerings[fingering_idx],
+                                             distances, weights);
+        }
+        break;
+      }
+
+      note_count += slice_note_count;
+      ++fingering_idx;
+    }
+  }
+
+  delta = new_penalty - old_penalty;
+  return delta;
 }
 
 }  // namespace piano_fingering::evaluator

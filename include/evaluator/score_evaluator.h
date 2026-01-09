@@ -24,6 +24,7 @@ class ScoreEvaluator {
       const domain::Piece& piece,
       const std::vector<domain::Fingering>& current_fingerings,
       const std::vector<domain::Fingering>& proposed_fingerings,
+      size_t changed_note_idx,
       domain::Hand hand) const;
 
  private:
