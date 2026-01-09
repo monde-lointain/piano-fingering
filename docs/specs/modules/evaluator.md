@@ -312,6 +312,9 @@ TEST(EvaluatorIntegrationTest, MatchPythonScorerOnGoldenSet) {
 
 1. **Logical const-correctness**: Evaluator is logically const; internal cache is mutable for performance
 2. **NOT thread-safe**: Mutable cache requires separate evaluator instance per thread
+   - **Parallel usage pattern**: Create one `ScoreEvaluator` per thread in ILS trajectories
+   - Call `evaluate()` once to warm cache, then `evaluate_delta()` achieves O(1) cache hits
+   - Memory cost: ~50KB per thread for 2000-note piece
 3. **Performance-critical**: Profile-guided optimization needed (hot path in ILS)
 4. **Cascading rules MUST accumulate**: Rules 1, 2, 13 are additive, not max
 5. **Cache invalidation**: evaluate() must be called before evaluate_delta() for correct cache state
