@@ -445,18 +445,20 @@ double apply_triplet_penalties(const NoteInfo& n1, const NoteInfo& n2,
 void apply_sequential_penalties_for_delta(
     size_t idx, const NoteInfo& old_changed, const NoteInfo& new_changed,
     const std::vector<NoteInfo>& old_notes,
-    const std::vector<NoteInfo>& new_notes, const config::DistanceMatrix& distances,
-    const config::RuleWeights& weights, domain::Hand hand, double& old_penalty,
-    double& new_penalty) {
+    const std::vector<NoteInfo>& new_notes,
+    const config::DistanceMatrix& distances, const config::RuleWeights& weights,
+    domain::Hand hand, double& old_penalty, double& new_penalty) {
   // Two-note rules: [prev, changed]
   if (idx > 0) {
     const NoteInfo* prev_prev_old = (idx >= 2) ? &old_notes[idx - 2] : nullptr;
     const NoteInfo* prev_prev_new = (idx >= 2) ? &new_notes[idx - 2] : nullptr;
 
-    old_penalty += apply_pair_penalties(old_notes[idx - 1], old_changed,
-                                        prev_prev_old, distances, weights, hand);
-    new_penalty += apply_pair_penalties(new_notes[idx - 1], new_changed,
-                                        prev_prev_new, distances, weights, hand);
+    old_penalty +=
+        apply_pair_penalties(old_notes[idx - 1], old_changed, prev_prev_old,
+                             distances, weights, hand);
+    new_penalty +=
+        apply_pair_penalties(new_notes[idx - 1], new_changed, prev_prev_new,
+                             distances, weights, hand);
   }
 
   // Two-note rules: [changed, next]
@@ -464,10 +466,10 @@ void apply_sequential_penalties_for_delta(
     const NoteInfo* prev_old = (idx > 0) ? &old_notes[idx - 1] : nullptr;
     const NoteInfo* prev_new = (idx > 0) ? &new_notes[idx - 1] : nullptr;
 
-    old_penalty += apply_pair_penalties(old_changed, old_notes[idx + 1], prev_old,
-                                        distances, weights, hand);
-    new_penalty += apply_pair_penalties(new_changed, new_notes[idx + 1], prev_new,
-                                        distances, weights, hand);
+    old_penalty += apply_pair_penalties(old_changed, old_notes[idx + 1],
+                                        prev_old, distances, weights, hand);
+    new_penalty += apply_pair_penalties(new_changed, new_notes[idx + 1],
+                                        prev_new, distances, weights, hand);
   }
 
   // Triplet [prev, changed, next]
@@ -488,12 +490,10 @@ void apply_sequential_penalties_for_delta(
 
   // Triplet [prev-1, prev, changed]
   if (idx >= 2) {
-    old_penalty +=
-        apply_triplet_penalties(old_notes[idx - 2], old_notes[idx - 1],
-                                old_changed, distances);
-    new_penalty +=
-        apply_triplet_penalties(new_notes[idx - 2], new_notes[idx - 1],
-                                new_changed, distances);
+    old_penalty += apply_triplet_penalties(
+        old_notes[idx - 2], old_notes[idx - 1], old_changed, distances);
+    new_penalty += apply_triplet_penalties(
+        new_notes[idx - 2], new_notes[idx - 1], new_changed, distances);
   }
 }
 
@@ -520,12 +520,12 @@ void apply_chord_penalties_for_delta(
       changed_location.fingering_idx >= proposed_fingerings.size()) {
     return;
   }
-  old_penalty +=
-      process_chord_slice(slice, current_fingerings[changed_location.fingering_idx],
-                          distances, weights);
-  new_penalty +=
-      process_chord_slice(slice, proposed_fingerings[changed_location.fingering_idx],
-                          distances, weights);
+  old_penalty += process_chord_slice(
+      slice, current_fingerings[changed_location.fingering_idx], distances,
+      weights);
+  new_penalty += process_chord_slice(
+      slice, proposed_fingerings[changed_location.fingering_idx], distances,
+      weights);
 }
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
@@ -588,19 +588,19 @@ double ScoreEvaluator::evaluate_delta(
     return new_score - old_score;
   }
 
-  // Only apply sequential rules if the changed note is the first note in its slice
-  // (i.e., if note_idx_in_slice == 0). Otherwise, it's an internal chord note
-  // and sequential rules don't apply to it.
+  // Only apply sequential rules if the changed note is the first note in its
+  // slice (i.e., if note_idx_in_slice == 0). Otherwise, it's an internal chord
+  // note and sequential rules don't apply to it.
   if (changed_location.note_idx_in_slice == 0) {
-    apply_sequential_penalties_for_delta(idx, old_changed, new_changed, old_notes,
-                                         new_notes, distances, weights, hand,
-                                         old_penalty, new_penalty);
+    apply_sequential_penalties_for_delta(
+        idx, old_changed, new_changed, old_notes, new_notes, distances, weights,
+        hand, old_penalty, new_penalty);
   }
 
   // Chord rules (Rule 14): if changed slice is a chord
-  apply_chord_penalties_for_delta(changed_location, measures, current_fingerings,
-                                  proposed_fingerings, distances, weights,
-                                  old_penalty, new_penalty);
+  apply_chord_penalties_for_delta(changed_location, measures,
+                                  current_fingerings, proposed_fingerings,
+                                  distances, weights, old_penalty, new_penalty);
 
   delta = new_penalty - old_penalty;
   return delta;
