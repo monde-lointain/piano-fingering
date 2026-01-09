@@ -10,7 +10,6 @@
 #include "evaluator/rules.h"
 
 namespace piano_fingering::evaluator {
-namespace {
 
 // Helper struct to hold note information
 struct NoteInfo {
@@ -18,6 +17,25 @@ struct NoteInfo {
   int pitch;
   bool is_black;
 };
+
+// Cache data for delta evaluation
+struct ScoreEvaluator::CacheData {
+  std::vector<NoteInfo> notes;
+  const std::vector<domain::Fingering>* fingerings{nullptr};
+  domain::Hand hand{domain::Hand::kRight};
+};
+
+// Constructor/destructor and move operations (needed for unique_ptr<CacheData>)
+ScoreEvaluator::ScoreEvaluator(const config::Config& config) noexcept
+    : config_(&config) {}
+
+ScoreEvaluator::~ScoreEvaluator() = default;
+
+ScoreEvaluator::ScoreEvaluator(ScoreEvaluator&&) noexcept = default;
+
+ScoreEvaluator& ScoreEvaluator::operator=(ScoreEvaluator&&) noexcept = default;
+
+namespace {
 
 // Extract non-rest notes with fingerings from measures
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
@@ -245,6 +263,13 @@ double ScoreEvaluator::evaluate(
   auto notes = collect_notes(measures, fingerings);
 
   if (notes.size() <= 1) {
+    // Cache empty result
+    if (!cache_) {
+      cache_ = std::make_unique<CacheData>();
+    }
+    cache_->notes = notes;
+    cache_->fingerings = &fingerings;
+    cache_->hand = hand;
     return 0.0;
   }
 
@@ -258,10 +283,16 @@ double ScoreEvaluator::evaluate(
   total_penalty +=
       apply_chord_penalties(measures, fingerings, distances, weights);
 
+  // Cache for delta evaluation
+  if (!cache_) {
+    cache_ = std::make_unique<CacheData>();
+  }
+  cache_->notes = std::move(notes);
+  cache_->fingerings = &fingerings;
+  cache_->hand = hand;
+
   return total_penalty;
 }
-
-
 
 // Get NoteInfo at a specific slice location - O(1) direct access
 std::optional<NoteInfo> get_note_at_location(
@@ -297,7 +328,8 @@ std::optional<NoteInfo> get_note_at_location(
         if (non_rest_count < slice_fingering.size()) {
           const auto& finger_opt = slice_fingering[non_rest_count];
           if (finger_opt.has_value()) {
-            return NoteInfo{*finger_opt, note.absolute_pitch(), note.pitch().is_black_key()};
+            return NoteInfo{*finger_opt, note.absolute_pitch(),
+                            note.pitch().is_black_key()};
           }
         }
         return std::nullopt;
@@ -311,6 +343,7 @@ std::optional<NoteInfo> get_note_at_location(
 
 // Build NoteInfo from measures and fingering at specific index - O(S) one-time
 // This collects all notes upfront, allowing O(1) access by index
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 std::vector<NoteInfo> build_note_info_vector(
     const std::vector<domain::Measure>& measures,
     const std::vector<domain::Fingering>& fingerings) {
@@ -365,8 +398,7 @@ double ScoreEvaluator::evaluate_delta(
     const domain::Piece& piece,
     const std::vector<domain::Fingering>& current_fingerings,
     const std::vector<domain::Fingering>& proposed_fingerings,
-    const SliceLocation& changed_location,
-    domain::Hand hand) const {
+    const SliceLocation& changed_location, domain::Hand hand) const {
   const auto& distances =
       (hand == domain::Hand::kLeft) ? config_->left_hand : config_->right_hand;
   const auto& weights = config_->weights;
@@ -374,8 +406,10 @@ double ScoreEvaluator::evaluate_delta(
       (hand == domain::Hand::kLeft) ? piece.left_hand() : piece.right_hand();
 
   // Get the changed note info - O(1) access to slice
-  auto old_changed_opt = get_note_at_location(measures, current_fingerings, changed_location);
-  auto new_changed_opt = get_note_at_location(measures, proposed_fingerings, changed_location);
+  auto old_changed_opt =
+      get_note_at_location(measures, current_fingerings, changed_location);
+  auto new_changed_opt =
+      get_note_at_location(measures, proposed_fingerings, changed_location);
 
   if (!old_changed_opt.has_value() || !new_changed_opt.has_value()) {
     // Invalid location or missing fingering - fallback to full evaluation
@@ -404,7 +438,8 @@ double ScoreEvaluator::evaluate_delta(
     penalty += apply_rule_7(n1.finger, n1.is_black, n2.finger, n2.is_black);
 
     std::optional<bool> prev_black =
-        prev_note ? std::optional<bool>(prev_note->is_black) : std::nullopt;
+        (prev_note != nullptr) ? std::optional<bool>(prev_note->is_black)
+                               : std::nullopt;
     std::optional<bool> next_black = n2.is_black;
     penalty += apply_rule_8(n1.finger, n1.is_black, prev_black, next_black);
 
@@ -422,14 +457,15 @@ double ScoreEvaluator::evaluate_delta(
     const auto& pair_distances =
         distances.get_pair(finger_pair_from(n1.finger, n2.finger));
     int actual_distance = n2.pitch - n1.pitch;
-    penalty += apply_cascading_penalty(pair_distances, actual_distance, weights);
+    penalty +=
+        apply_cascading_penalty(pair_distances, actual_distance, weights);
 
     return penalty;
   };
 
   // Helper to apply three-note rules on a triplet - O(1)
   auto apply_triplet_penalties = [&](const NoteInfo& n1, const NoteInfo& n2,
-                                      const NoteInfo& n3) {
+                                     const NoteInfo& n3) {
     double penalty = 0.0;
 
     const auto& pair_distances =
@@ -450,8 +486,18 @@ double ScoreEvaluator::evaluate_delta(
     return penalty;
   };
 
-  // Build note vectors for O(1) access - O(S) one-time cost
-  auto old_notes = build_note_info_vector(measures, current_fingerings);
+  // Use cached old_notes if available (cache hit = O(1), miss = O(S))
+  std::vector<NoteInfo> old_notes;
+  if (cache_ && cache_->fingerings == &current_fingerings &&
+      cache_->hand == hand) {
+    // Cache hit - O(1) access
+    old_notes = cache_->notes;
+  } else {
+    // Cache miss - rebuild O(S)
+    old_notes = build_note_info_vector(measures, current_fingerings);
+  }
+
+  // Build new_notes - O(S) one-time cost
   auto new_notes = build_note_info_vector(measures, proposed_fingerings);
 
   size_t idx = changed_location.fingering_idx;
@@ -465,12 +511,14 @@ double ScoreEvaluator::evaluate_delta(
   }
 
   // Two-note rules: [prev, changed] - O(1)
-  if (idx > 0 && idx < old_notes.size() && idx < new_notes.size()) {
+  if (idx > 0) {
     const NoteInfo* prev_prev_old = (idx >= 2) ? &old_notes[idx - 2] : nullptr;
     const NoteInfo* prev_prev_new = (idx >= 2) ? &new_notes[idx - 2] : nullptr;
 
-    old_penalty += apply_pair_penalties(old_notes[idx - 1], old_changed, prev_prev_old);
-    new_penalty += apply_pair_penalties(new_notes[idx - 1], new_changed, prev_prev_new);
+    old_penalty +=
+        apply_pair_penalties(old_notes[idx - 1], old_changed, prev_prev_old);
+    new_penalty +=
+        apply_pair_penalties(new_notes[idx - 1], new_changed, prev_prev_new);
   }
 
   // Two-note rules: [changed, next] - O(1)
@@ -478,8 +526,10 @@ double ScoreEvaluator::evaluate_delta(
     const NoteInfo* prev_old = (idx > 0) ? &old_notes[idx - 1] : nullptr;
     const NoteInfo* prev_new = (idx > 0) ? &new_notes[idx - 1] : nullptr;
 
-    old_penalty += apply_pair_penalties(old_changed, old_notes[idx + 1], prev_old);
-    new_penalty += apply_pair_penalties(new_changed, new_notes[idx + 1], prev_new);
+    old_penalty +=
+        apply_pair_penalties(old_changed, old_notes[idx + 1], prev_old);
+    new_penalty +=
+        apply_pair_penalties(new_changed, new_notes[idx + 1], prev_new);
   }
 
   // Three-note rules: triplets involving changed note - O(1) each
@@ -500,14 +550,15 @@ double ScoreEvaluator::evaluate_delta(
   }
 
   // Triplet [prev-1, prev, changed]
-  if (idx >= 2 && idx < old_notes.size() && idx < new_notes.size()) {
-    old_penalty += apply_triplet_penalties(old_notes[idx - 2], old_notes[idx - 1],
-                                           old_changed);
-    new_penalty += apply_triplet_penalties(new_notes[idx - 2], new_notes[idx - 1],
-                                           new_changed);
+  if (idx >= 2) {
+    old_penalty += apply_triplet_penalties(old_notes[idx - 2],
+                                           old_notes[idx - 1], old_changed);
+    new_penalty += apply_triplet_penalties(new_notes[idx - 2],
+                                           new_notes[idx - 1], new_changed);
   }
 
-  // Chord rules (Rule 14): if changed slice is a chord - O(1) access + O(M²) processing
+  // Chord rules (Rule 14): if changed slice is a chord - O(1) access + O(M²)
+  // processing
   if (changed_location.measure_idx < measures.size()) {
     const auto& measure = measures[changed_location.measure_idx];
     if (changed_location.slice_idx < measure.size()) {
@@ -516,12 +567,12 @@ double ScoreEvaluator::evaluate_delta(
         // Use fingering_idx directly from location - O(1)
         if (changed_location.fingering_idx < current_fingerings.size() &&
             changed_location.fingering_idx < proposed_fingerings.size()) {
-          old_penalty += process_chord_slice(slice,
-                                             current_fingerings[changed_location.fingering_idx],
-                                             distances, weights);
-          new_penalty += process_chord_slice(slice,
-                                             proposed_fingerings[changed_location.fingering_idx],
-                                             distances, weights);
+          old_penalty += process_chord_slice(
+              slice, current_fingerings[changed_location.fingering_idx],
+              distances, weights);
+          new_penalty += process_chord_slice(
+              slice, proposed_fingerings[changed_location.fingering_idx],
+              distances, weights);
         }
       }
     }
