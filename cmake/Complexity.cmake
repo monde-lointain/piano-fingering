@@ -7,6 +7,7 @@ if(LIZARD_EXECUTABLE)
     COMMAND ${LIZARD_EXECUTABLE}
       -C 10
       -L 60
+      -i 2
       ${CMAKE_SOURCE_DIR}/src
       ${CMAKE_SOURCE_DIR}/include
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}

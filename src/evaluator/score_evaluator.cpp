@@ -442,6 +442,7 @@ double apply_triplet_penalties(const NoteInfo& n1, const NoteInfo& n2,
 }
 
 // Apply sequential rule penalties for a changed note in delta evaluation
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void apply_sequential_penalties_for_delta(
     size_t idx, const NoteInfo& old_changed, const NoteInfo& new_changed,
     const std::vector<NoteInfo>& old_notes,
