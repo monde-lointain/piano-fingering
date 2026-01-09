@@ -16,6 +16,7 @@ class ScoreEvaluator {
     size_t measure_idx;
     size_t slice_idx;
     size_t note_idx_in_slice;
+    size_t fingering_idx;
   };
 
   explicit ScoreEvaluator(const config::Config& config) noexcept

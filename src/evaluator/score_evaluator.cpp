@@ -262,38 +262,8 @@ double ScoreEvaluator::evaluate(
 }
 
 
-// Helper to compute fingering index from slice location - O(S)
-// Counts number of non-empty, non-rest slices before the target
-size_t compute_fingering_idx(
-    const std::vector<domain::Measure>& measures,
-    size_t target_measure_idx,
-    size_t target_slice_idx) {
-  size_t fingering_idx = 0;
 
-  for (size_t m_idx = 0; m_idx < measures.size() && m_idx <= target_measure_idx; ++m_idx) {
-    const auto& measure = measures[m_idx];
-    size_t slice_limit = (m_idx == target_measure_idx) ? target_slice_idx : measure.size();
-
-    for (size_t s_idx = 0; s_idx < slice_limit; ++s_idx) {
-      const auto& slice = measure[s_idx];
-      if (slice.empty()) {
-        continue;
-      }
-
-      bool has_non_rest = std::any_of(
-          slice.begin(), slice.end(),
-          [](const auto& note) { return !note.is_rest(); });
-
-      if (has_non_rest) {
-        ++fingering_idx;
-      }
-    }
-  }
-
-  return fingering_idx;
-}
-
-// Get NoteInfo at a specific slice location - O(1) access to slice, O(N) to find note
+// Get NoteInfo at a specific slice location - O(1) direct access
 std::optional<NoteInfo> get_note_at_location(
     const std::vector<domain::Measure>& measures,
     const std::vector<domain::Fingering>& fingerings,
@@ -312,13 +282,12 @@ std::optional<NoteInfo> get_note_at_location(
     return std::nullopt;
   }
 
-  // Compute fingering index for this slice
-  size_t fingering_idx = compute_fingering_idx(measures, location.measure_idx, location.slice_idx);
-  if (fingering_idx >= fingerings.size()) {
+  // Use fingering_idx directly from location - O(1)
+  if (location.fingering_idx >= fingerings.size()) {
     return std::nullopt;
   }
 
-  const auto& slice_fingering = fingerings[fingering_idx];
+  const auto& slice_fingering = fingerings[location.fingering_idx];
 
   // Find the note at note_idx_in_slice (counting only non-rest notes)
   size_t non_rest_count = 0;
@@ -340,102 +309,55 @@ std::optional<NoteInfo> get_note_at_location(
   return std::nullopt;
 }
 
-// Find previous slice location - O(S) worst case
-std::optional<ScoreEvaluator::SliceLocation> find_prev_slice(
+// Build NoteInfo from measures and fingering at specific index - O(S) one-time
+// This collects all notes upfront, allowing O(1) access by index
+std::vector<NoteInfo> build_note_info_vector(
     const std::vector<domain::Measure>& measures,
-    size_t current_measure_idx,
-    size_t current_slice_idx) {
-  // Try previous slice in same measure
-  if (current_slice_idx > 0) {
-    for (size_t s_idx = current_slice_idx - 1; s_idx != SIZE_MAX; --s_idx) {
-      const auto& slice = measures[current_measure_idx][s_idx];
-      if (!slice.empty()) {
-        bool has_non_rest = std::any_of(
-            slice.begin(), slice.end(),
-            [](const auto& note) { return !note.is_rest(); });
-        if (has_non_rest) {
-          // Count notes in this slice
-          size_t note_count = 0;
-          for (const auto& note : slice) {
-            if (!note.is_rest()) {
-              ++note_count;
+    const std::vector<domain::Fingering>& fingerings) {
+  std::vector<NoteInfo> notes;
+  size_t fingering_idx = 0;
+
+  for (const auto& measure : measures) {
+    for (const auto& slice : measure) {
+      if (slice.empty()) {
+        continue;
+      }
+
+      bool has_non_rest =
+          std::any_of(slice.begin(), slice.end(),
+                      [](const auto& note) { return !note.is_rest(); });
+      if (!has_non_rest) {
+        continue;
+      }
+
+      if (fingering_idx >= fingerings.size()) {
+        break;
+      }
+
+      const auto& slice_fingering = fingerings[fingering_idx];
+      size_t note_idx = 0;
+
+      // For now, we just take the first non-rest note in the slice
+      // (chords are handled separately)
+      for (const auto& note : slice) {
+        if (!note.is_rest()) {
+          if (note_idx < slice_fingering.size()) {
+            const auto& finger_opt = slice_fingering[note_idx];
+            if (finger_opt.has_value()) {
+              notes.push_back({*finger_opt, note.absolute_pitch(),
+                               note.pitch().is_black_key()});
+              break;  // Only take first note per slice for sequential rules
             }
           }
-          // Return location of last note in previous slice
-          return ScoreEvaluator::SliceLocation{current_measure_idx, s_idx, note_count - 1};
+          ++note_idx;
         }
       }
-      if (s_idx == 0) break;
+
+      ++fingering_idx;
     }
   }
 
-  // Try previous measure
-  if (current_measure_idx > 0) {
-    for (size_t m_idx = current_measure_idx - 1; m_idx != SIZE_MAX; --m_idx) {
-      const auto& measure = measures[m_idx];
-      for (size_t s_idx = measure.size() - 1; s_idx != SIZE_MAX; --s_idx) {
-        const auto& slice = measure[s_idx];
-        if (!slice.empty()) {
-          bool has_non_rest = std::any_of(
-              slice.begin(), slice.end(),
-              [](const auto& note) { return !note.is_rest(); });
-          if (has_non_rest) {
-            size_t note_count = 0;
-            for (const auto& note : slice) {
-              if (!note.is_rest()) {
-                ++note_count;
-              }
-            }
-            return ScoreEvaluator::SliceLocation{m_idx, s_idx, note_count - 1};
-          }
-        }
-        if (s_idx == 0) break;
-      }
-      if (m_idx == 0) break;
-    }
-  }
-
-  return std::nullopt;
-}
-
-// Find next slice location - O(S) worst case
-std::optional<ScoreEvaluator::SliceLocation> find_next_slice(
-    const std::vector<domain::Measure>& measures,
-    size_t current_measure_idx,
-    size_t current_slice_idx) {
-  // Try next slice in same measure
-  if (current_measure_idx < measures.size()) {
-    const auto& current_measure = measures[current_measure_idx];
-    for (size_t s_idx = current_slice_idx + 1; s_idx < current_measure.size(); ++s_idx) {
-      const auto& slice = current_measure[s_idx];
-      if (!slice.empty()) {
-        bool has_non_rest = std::any_of(
-            slice.begin(), slice.end(),
-            [](const auto& note) { return !note.is_rest(); });
-        if (has_non_rest) {
-          return ScoreEvaluator::SliceLocation{current_measure_idx, s_idx, 0};
-        }
-      }
-    }
-  }
-
-  // Try next measure
-  for (size_t m_idx = current_measure_idx + 1; m_idx < measures.size(); ++m_idx) {
-    const auto& measure = measures[m_idx];
-    for (size_t s_idx = 0; s_idx < measure.size(); ++s_idx) {
-      const auto& slice = measure[s_idx];
-      if (!slice.empty()) {
-        bool has_non_rest = std::any_of(
-            slice.begin(), slice.end(),
-            [](const auto& note) { return !note.is_rest(); });
-        if (has_non_rest) {
-          return ScoreEvaluator::SliceLocation{m_idx, s_idx, 0};
-        }
-      }
-    }
-  }
-
-  return std::nullopt;
+  return notes;
 }
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
@@ -528,68 +450,61 @@ double ScoreEvaluator::evaluate_delta(
     return penalty;
   };
 
-  // Get neighbor locations - O(S) worst case
-  auto prev_loc_opt = find_prev_slice(measures, changed_location.measure_idx, changed_location.slice_idx);
-  auto next_loc_opt = find_next_slice(measures, changed_location.measure_idx, changed_location.slice_idx);
+  // Build note vectors for O(1) access - O(S) one-time cost
+  auto old_notes = build_note_info_vector(measures, current_fingerings);
+  auto new_notes = build_note_info_vector(measures, proposed_fingerings);
 
-  // Get neighbor notes
-  auto prev_old_opt = prev_loc_opt ? get_note_at_location(measures, current_fingerings, *prev_loc_opt) : std::nullopt;
-  auto prev_new_opt = prev_loc_opt ? get_note_at_location(measures, proposed_fingerings, *prev_loc_opt) : std::nullopt;
-  auto next_old_opt = next_loc_opt ? get_note_at_location(measures, current_fingerings, *next_loc_opt) : std::nullopt;
-  auto next_new_opt = next_loc_opt ? get_note_at_location(measures, proposed_fingerings, *next_loc_opt) : std::nullopt;
+  size_t idx = changed_location.fingering_idx;
+
+  // Verify we have valid notes at the changed index
+  if (idx >= old_notes.size() || idx >= new_notes.size()) {
+    // Fallback to full evaluation
+    double new_score = evaluate(piece, proposed_fingerings, hand);
+    double old_score = evaluate(piece, current_fingerings, hand);
+    return new_score - old_score;
+  }
 
   // Two-note rules: [prev, changed] - O(1)
-  if (prev_old_opt.has_value() && prev_new_opt.has_value()) {
-    auto prev_prev_loc = prev_loc_opt ? find_prev_slice(measures, prev_loc_opt->measure_idx, prev_loc_opt->slice_idx) : std::nullopt;
-    auto prev_prev_old = prev_prev_loc ? get_note_at_location(measures, current_fingerings, *prev_prev_loc) : std::nullopt;
-    auto prev_prev_new = prev_prev_loc ? get_note_at_location(measures, proposed_fingerings, *prev_prev_loc) : std::nullopt;
+  if (idx > 0 && idx < old_notes.size() && idx < new_notes.size()) {
+    const NoteInfo* prev_prev_old = (idx >= 2) ? &old_notes[idx - 2] : nullptr;
+    const NoteInfo* prev_prev_new = (idx >= 2) ? &new_notes[idx - 2] : nullptr;
 
-    old_penalty += apply_pair_penalties(*prev_old_opt, old_changed,
-                                        prev_prev_old.has_value() ? &(*prev_prev_old) : nullptr);
-    new_penalty += apply_pair_penalties(*prev_new_opt, new_changed,
-                                        prev_prev_new.has_value() ? &(*prev_prev_new) : nullptr);
+    old_penalty += apply_pair_penalties(old_notes[idx - 1], old_changed, prev_prev_old);
+    new_penalty += apply_pair_penalties(new_notes[idx - 1], new_changed, prev_prev_new);
   }
 
   // Two-note rules: [changed, next] - O(1)
-  if (next_old_opt.has_value() && next_new_opt.has_value()) {
-    old_penalty += apply_pair_penalties(old_changed, *next_old_opt,
-                                        prev_old_opt.has_value() ? &(*prev_old_opt) : nullptr);
-    new_penalty += apply_pair_penalties(new_changed, *next_new_opt,
-                                        prev_new_opt.has_value() ? &(*prev_new_opt) : nullptr);
+  if (idx + 1 < old_notes.size() && idx + 1 < new_notes.size()) {
+    const NoteInfo* prev_old = (idx > 0) ? &old_notes[idx - 1] : nullptr;
+    const NoteInfo* prev_new = (idx > 0) ? &new_notes[idx - 1] : nullptr;
+
+    old_penalty += apply_pair_penalties(old_changed, old_notes[idx + 1], prev_old);
+    new_penalty += apply_pair_penalties(new_changed, new_notes[idx + 1], prev_new);
   }
 
   // Three-note rules: triplets involving changed note - O(1) each
   // Triplet [prev, changed, next]
-  if (prev_old_opt.has_value() && next_old_opt.has_value() &&
-      prev_new_opt.has_value() && next_new_opt.has_value()) {
-    old_penalty += apply_triplet_penalties(*prev_old_opt, old_changed, *next_old_opt);
-    new_penalty += apply_triplet_penalties(*prev_new_opt, new_changed, *next_new_opt);
+  if (idx > 0 && idx + 1 < old_notes.size() && idx + 1 < new_notes.size()) {
+    old_penalty += apply_triplet_penalties(old_notes[idx - 1], old_changed,
+                                           old_notes[idx + 1]);
+    new_penalty += apply_triplet_penalties(new_notes[idx - 1], new_changed,
+                                           new_notes[idx + 1]);
   }
 
   // Triplet [changed, next, next+1]
-  if (next_old_opt.has_value() && next_new_opt.has_value() && next_loc_opt.has_value()) {
-    auto next2_loc = find_next_slice(measures, next_loc_opt->measure_idx, next_loc_opt->slice_idx);
-    if (next2_loc.has_value()) {
-      auto next2_old = get_note_at_location(measures, current_fingerings, *next2_loc);
-      auto next2_new = get_note_at_location(measures, proposed_fingerings, *next2_loc);
-      if (next2_old.has_value() && next2_new.has_value()) {
-        old_penalty += apply_triplet_penalties(old_changed, *next_old_opt, *next2_old);
-        new_penalty += apply_triplet_penalties(new_changed, *next_new_opt, *next2_new);
-      }
-    }
+  if (idx + 2 < old_notes.size() && idx + 2 < new_notes.size()) {
+    old_penalty += apply_triplet_penalties(old_changed, old_notes[idx + 1],
+                                           old_notes[idx + 2]);
+    new_penalty += apply_triplet_penalties(new_changed, new_notes[idx + 1],
+                                           new_notes[idx + 2]);
   }
 
   // Triplet [prev-1, prev, changed]
-  if (prev_old_opt.has_value() && prev_new_opt.has_value() && prev_loc_opt.has_value()) {
-    auto prev2_loc = find_prev_slice(measures, prev_loc_opt->measure_idx, prev_loc_opt->slice_idx);
-    if (prev2_loc.has_value()) {
-      auto prev2_old = get_note_at_location(measures, current_fingerings, *prev2_loc);
-      auto prev2_new = get_note_at_location(measures, proposed_fingerings, *prev2_loc);
-      if (prev2_old.has_value() && prev2_new.has_value()) {
-        old_penalty += apply_triplet_penalties(*prev2_old, *prev_old_opt, old_changed);
-        new_penalty += apply_triplet_penalties(*prev2_new, *prev_new_opt, new_changed);
-      }
-    }
+  if (idx >= 2 && idx < old_notes.size() && idx < new_notes.size()) {
+    old_penalty += apply_triplet_penalties(old_notes[idx - 2], old_notes[idx - 1],
+                                           old_changed);
+    new_penalty += apply_triplet_penalties(new_notes[idx - 2], new_notes[idx - 1],
+                                           new_changed);
   }
 
   // Chord rules (Rule 14): if changed slice is a chord - O(1) access + O(M²) processing
@@ -598,16 +513,14 @@ double ScoreEvaluator::evaluate_delta(
     if (changed_location.slice_idx < measure.size()) {
       const auto& slice = measure[changed_location.slice_idx];
       if (slice.size() > 1) {
-        // Compute fingering index for this slice - O(S)
-        size_t fingering_idx = compute_fingering_idx(measures, changed_location.measure_idx, changed_location.slice_idx);
-
-        if (fingering_idx < current_fingerings.size() &&
-            fingering_idx < proposed_fingerings.size()) {
+        // Use fingering_idx directly from location - O(1)
+        if (changed_location.fingering_idx < current_fingerings.size() &&
+            changed_location.fingering_idx < proposed_fingerings.size()) {
           old_penalty += process_chord_slice(slice,
-                                             current_fingerings[fingering_idx],
+                                             current_fingerings[changed_location.fingering_idx],
                                              distances, weights);
           new_penalty += process_chord_slice(slice,
-                                             proposed_fingerings[fingering_idx],
+                                             proposed_fingerings[changed_location.fingering_idx],
                                              distances, weights);
         }
       }
