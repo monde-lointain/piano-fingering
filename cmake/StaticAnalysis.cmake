@@ -19,6 +19,8 @@ if(CPPCHECK_EXECUTABLE)
       --enable=all
       --suppress=missingIncludeSystem
       --suppress=unusedFunction
+      --suppress=checkersReport
+      --suppress=normalCheckLevelMaxBranches
       --inline-suppr
       --std=c++20
       --error-exitcode=1
