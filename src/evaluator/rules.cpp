@@ -212,10 +212,13 @@ double apply_rule_3(const config::FingerPairDistances& d, int p1, int p2,
 }
 
 double apply_rule_4(const config::FingerPairDistances& d, int span) {
-  if (span <= d.max_comf) {
-    return 0.0;
+  if (span < d.min_comf) {
+    return static_cast<double>(d.min_comf - span);
   }
-  return static_cast<double>(span - d.max_comf);
+  if (span > d.max_comf) {
+    return static_cast<double>(span - d.max_comf);
+  }
+  return 0.0;
 }
 
 double apply_rule_12(int p1, int p2, int p3, Finger f1,
