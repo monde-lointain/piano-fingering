@@ -218,12 +218,13 @@ TEST(ScoreEvaluatorTest, EvaluateDeltaReturnsScoreDifference) {
   std::vector<Fingering> current = {Fingering({Finger::kThumb}),
                                     Fingering({Finger::kIndex})};
 
-  // Proposed: thumb -> middle (change at index 1)
+  // Proposed: thumb -> middle (change at slice location: measure 0, slice 1, note 0)
   std::vector<Fingering> proposed = {Fingering({Finger::kThumb}),
                                      Fingering({Finger::kMiddle})};
 
+  ScoreEvaluator::SliceLocation changed_loc{0, 1, 0};
   double delta =
-      evaluator.evaluate_delta(piece, current, proposed, 1, Hand::kRight);
+      evaluator.evaluate_delta(piece, current, proposed, changed_loc, Hand::kRight);
   double old_score = evaluator.evaluate(piece, current, Hand::kRight);
   double new_score = evaluator.evaluate(piece, proposed, Hand::kRight);
 
@@ -248,13 +249,14 @@ TEST(ScoreEvaluatorTest, EvaluateDeltaWithChangedMiddleNote) {
                                     Fingering({Finger::kIndex}),
                                     Fingering({Finger::kMiddle})};
 
-  // Proposed: 1-4-3 (change middle note at index 1)
+  // Proposed: 1-4-3 (change middle note at slice location: measure 0, slice 1, note 0)
   std::vector<Fingering> proposed = {Fingering({Finger::kThumb}),
                                      Fingering({Finger::kRing}),
                                      Fingering({Finger::kMiddle})};
 
+  ScoreEvaluator::SliceLocation changed_loc{0, 1, 0};
   double delta =
-      evaluator.evaluate_delta(piece, current, proposed, 1, Hand::kRight);
+      evaluator.evaluate_delta(piece, current, proposed, changed_loc, Hand::kRight);
   double old_score = evaluator.evaluate(piece, current, Hand::kRight);
   double new_score = evaluator.evaluate(piece, proposed, Hand::kRight);
 
@@ -276,12 +278,13 @@ TEST(ScoreEvaluatorTest, EvaluateDeltaWithFirstNoteChange) {
   std::vector<Fingering> current = {Fingering({Finger::kThumb}),
                                     Fingering({Finger::kIndex})};
 
-  // Proposed: 2-2 (change first note at index 0)
+  // Proposed: 2-2 (change first note at slice location: measure 0, slice 0, note 0)
   std::vector<Fingering> proposed = {Fingering({Finger::kIndex}),
                                      Fingering({Finger::kIndex})};
 
+  ScoreEvaluator::SliceLocation changed_loc{0, 0, 0};
   double delta =
-      evaluator.evaluate_delta(piece, current, proposed, 0, Hand::kRight);
+      evaluator.evaluate_delta(piece, current, proposed, changed_loc, Hand::kRight);
   double old_score = evaluator.evaluate(piece, current, Hand::kRight);
   double new_score = evaluator.evaluate(piece, proposed, Hand::kRight);
 
@@ -303,12 +306,13 @@ TEST(ScoreEvaluatorTest, EvaluateDeltaWithLastNoteChange) {
   std::vector<Fingering> current = {Fingering({Finger::kThumb}),
                                     Fingering({Finger::kIndex})};
 
-  // Proposed: 1-3 (change last note at index 1)
+  // Proposed: 1-3 (change last note at slice location: measure 0, slice 1, note 0)
   std::vector<Fingering> proposed = {Fingering({Finger::kThumb}),
                                      Fingering({Finger::kMiddle})};
 
+  ScoreEvaluator::SliceLocation changed_loc{0, 1, 0};
   double delta =
-      evaluator.evaluate_delta(piece, current, proposed, 1, Hand::kRight);
+      evaluator.evaluate_delta(piece, current, proposed, changed_loc, Hand::kRight);
   double old_score = evaluator.evaluate(piece, current, Hand::kRight);
   double new_score = evaluator.evaluate(piece, proposed, Hand::kRight);
 
@@ -332,12 +336,13 @@ TEST(ScoreEvaluatorTest, EvaluateDeltaWithChordChange) {
   std::vector<Fingering> current = {
       Fingering({Finger::kThumb, Finger::kMiddle}), Fingering({Finger::kPinky})};
 
-  // Proposed: chord 1-2, then 5 (change second note in chord at index 1)
+  // Proposed: chord 1-2, then 5 (change second note in chord at slice location: measure 0, slice 0, note 1)
   std::vector<Fingering> proposed = {
       Fingering({Finger::kThumb, Finger::kIndex}), Fingering({Finger::kPinky})};
 
+  ScoreEvaluator::SliceLocation changed_loc{0, 0, 1};
   double delta =
-      evaluator.evaluate_delta(piece, current, proposed, 1, Hand::kRight);
+      evaluator.evaluate_delta(piece, current, proposed, changed_loc, Hand::kRight);
   double old_score = evaluator.evaluate(piece, current, Hand::kRight);
   double new_score = evaluator.evaluate(piece, proposed, Hand::kRight);
 

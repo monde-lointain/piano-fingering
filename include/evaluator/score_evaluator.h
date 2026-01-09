@@ -12,6 +12,12 @@ namespace piano_fingering::evaluator {
 
 class ScoreEvaluator {
  public:
+  struct SliceLocation {
+    size_t measure_idx;
+    size_t slice_idx;
+    size_t note_idx_in_slice;
+  };
+
   explicit ScoreEvaluator(const config::Config& config) noexcept
       : config_(&config) {}
 
@@ -24,7 +30,7 @@ class ScoreEvaluator {
       const domain::Piece& piece,
       const std::vector<domain::Fingering>& current_fingerings,
       const std::vector<domain::Fingering>& proposed_fingerings,
-      size_t changed_note_idx,
+      const SliceLocation& changed_location,
       domain::Hand hand) const;
 
  private:
