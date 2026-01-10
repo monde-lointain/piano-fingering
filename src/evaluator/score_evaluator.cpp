@@ -201,26 +201,21 @@ double apply_single_note_rules(
   return penalty;
 }
 
-// Apply two-note rules between consecutive notes
-double apply_two_note_rules(const std::vector<NoteInfo>& notes, size_t i,
+// Apply two-note rules between a pair of consecutive notes
+double apply_pair_penalties(const NoteInfo& n1, const NoteInfo& n2,
+                            const NoteInfo* prev_note,
                             const config::DistanceMatrix& distances,
                             const config::RuleWeights& weights,
                             domain::Hand hand) {
-  if (i + 1 >= notes.size()) {
-    return 0.0;
-  }
-
-  const auto& n1 = notes[i];
-  const auto& n2 = notes[i + 1];
   double penalty = 0.0;
 
   penalty += apply_rule_6(n1.finger, n2.finger);
   penalty += apply_rule_7(n1.finger, n1.is_black, n2.finger, n2.is_black);
 
   std::optional<bool> prev_black =
-      (i > 0) ? std::optional<bool>(notes[i - 1].is_black) : std::nullopt;
-  std::optional<bool> next_black =
-      (i + 1 < notes.size()) ? std::optional<bool>(n2.is_black) : std::nullopt;
+      (prev_note != nullptr) ? std::optional<bool>(prev_note->is_black)
+                             : std::nullopt;
+  std::optional<bool> next_black = n2.is_black;
   penalty += apply_rule_8(n1.finger, n1.is_black, prev_black, next_black);
 
   penalty += apply_rule_9(n1.finger, n1.is_black, n2.is_black);
@@ -240,6 +235,21 @@ double apply_two_note_rules(const std::vector<NoteInfo>& notes, size_t i,
   penalty += apply_cascading_penalty(pair_distances, actual_distance, weights);
 
   return penalty;
+}
+
+// Apply two-note rules between consecutive notes (delegates to
+// apply_pair_penalties)
+double apply_two_note_rules(const std::vector<NoteInfo>& notes, size_t i,
+                            const config::DistanceMatrix& distances,
+                            const config::RuleWeights& weights,
+                            domain::Hand hand) {
+  if (i + 1 >= notes.size()) {
+    return 0.0;
+  }
+
+  const NoteInfo* prev_note = (i > 0) ? &notes[i - 1] : nullptr;
+  return apply_pair_penalties(notes[i], notes[i + 1], prev_note, distances,
+                              weights, hand);
 }
 
 // Apply three-note rules for triplets
@@ -358,42 +368,6 @@ std::optional<NoteInfo> get_note_at_location(
   }
 
   return std::nullopt;
-}
-
-// Apply two-note rules between a pair of consecutive notes
-double apply_pair_penalties(const NoteInfo& n1, const NoteInfo& n2,
-                            const NoteInfo* prev_note,
-                            const config::DistanceMatrix& distances,
-                            const config::RuleWeights& weights,
-                            domain::Hand hand) {
-  double penalty = 0.0;
-
-  penalty += apply_rule_6(n1.finger, n2.finger);
-  penalty += apply_rule_7(n1.finger, n1.is_black, n2.finger, n2.is_black);
-
-  std::optional<bool> prev_black =
-      (prev_note != nullptr) ? std::optional<bool>(prev_note->is_black)
-                             : std::nullopt;
-  std::optional<bool> next_black = n2.is_black;
-  penalty += apply_rule_8(n1.finger, n1.is_black, prev_black, next_black);
-
-  penalty += apply_rule_9(n1.finger, n1.is_black, n2.is_black);
-  penalty += apply_rule_9(n2.finger, n2.is_black, n1.is_black);
-
-  bool crossing = is_crossing(n1.finger, n1.pitch, n2.finger, n2.pitch, hand);
-  penalty += apply_rule_10(crossing, n1.is_black, n2.is_black);
-
-  auto params = compute_rule11_params(n1, n2);
-  penalty += apply_rule_11(params.lower_pitch, params.lower_black,
-                           params.lower_finger, params.higher_pitch,
-                           params.higher_black, params.higher_finger);
-
-  const auto& pair_distances =
-      distances.get_pair(finger_pair_from(n1.finger, n2.finger));
-  int actual_distance = n2.pitch - n1.pitch;
-  penalty += apply_cascading_penalty(pair_distances, actual_distance, weights);
-
-  return penalty;
 }
 
 // Apply three-note rules on a triplet of consecutive notes
