@@ -3,6 +3,7 @@
 #ifndef PFING_PARSER_PITCH_MAPPING_H_
 #define PFING_PARSER_PITCH_MAPPING_H_
 
+#include <array>
 #include <stdexcept>
 
 #include "domain/pitch.h"
@@ -15,14 +16,14 @@ namespace piano_fingering::parser {
 // Returns: domain::Pitch with value 0-13
 // Throws: std::invalid_argument if step is not A-G
 inline domain::Pitch step_alter_to_pitch(const std::string& step, int alter) {
-  static constexpr int kBase[] = {9, 11, 0, 2, 4, 6, 7};  // A-G
+  static constexpr std::array<int, 7> kBase = {9, 11, 0, 2, 4, 6, 7};  // A-G
 
   if (step.empty()) {
     throw std::invalid_argument("Invalid step: empty string");
   }
 
   char ch = step[0];
-  int idx;
+  int idx = 0;
   if (ch >= 'a' && ch <= 'g') {
     idx = ch - 'a';
   } else if (ch >= 'A' && ch <= 'G') {

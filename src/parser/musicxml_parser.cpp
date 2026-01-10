@@ -18,6 +18,10 @@ namespace piano_fingering::parser {
 
 namespace {
 
+// Staff constants for piano parts
+constexpr int kRightHandStaff = 1;
+constexpr int kLeftHandStaff = 2;
+
 // Extract metadata (title, composer) from XML root
 domain::Metadata extract_metadata(const pugi::xml_node& root) {
   auto work = root.child("work");
@@ -79,8 +83,8 @@ domain::Note extract_note(const pugi::xml_node& note_node) {
   }
   uint32_t duration = duration_node.text().as_uint(0);
 
-  // Extract staff (default to 1)
-  int staff = note_node.child("staff").text().as_int(1);
+  // Extract staff (default to right hand)
+  int staff = note_node.child("staff").text().as_int(kRightHandStaff);
 
   // Extract voice (default to 1)
   int voice = note_node.child("voice").text().as_int(1);
@@ -156,8 +160,8 @@ MeasureData extract_measure(const pugi::xml_node& measure_node,
   }
 
   // Extract slices for both staves
-  data.rh_slices = extract_slices_for_staff(measure_node, 1);
-  data.lh_slices = extract_slices_for_staff(measure_node, 2);
+  data.rh_slices = extract_slices_for_staff(measure_node, kRightHandStaff);
+  data.lh_slices = extract_slices_for_staff(measure_node, kLeftHandStaff);
 
   return data;
 }
@@ -174,7 +178,8 @@ MusicXMLParser::ParseResult MusicXMLParser::parse(
     if (!std::filesystem::exists(xml_path)) {
       throw FileNotFoundError(xml_path.string());
     }
-    throw MalformedXMLError(result.offset, result.description());
+    throw MalformedXMLError(static_cast<int>(result.offset),
+                            result.description());
   }
 
   // Get root element
