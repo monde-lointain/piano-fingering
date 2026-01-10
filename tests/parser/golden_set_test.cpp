@@ -1,10 +1,11 @@
 // tests/parser/golden_set_test.cpp - Integration tests for baseline files
 
-#include "parser/musicxml_parser.h"
+#include <gtest/gtest.h>
 
 #include <filesystem>
-#include <gtest/gtest.h>
 #include <vector>
+
+#include "parser/musicxml_parser.h"
 
 namespace piano_fingering::parser {
 namespace {

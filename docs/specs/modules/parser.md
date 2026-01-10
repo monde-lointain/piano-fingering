@@ -1,5 +1,7 @@
 # Module: MusicXML Parser
 
+> **Status:** ✅ Implemented
+
 ## Responsibilities
 
 1. **Read MusicXML files** from filesystem using pugixml

@@ -26,14 +26,16 @@ constexpr int kLeftHandStaff = 2;
 domain::Metadata extract_metadata(const pugi::xml_node& root) {
   auto work = root.child("work");
   auto title_node = work.child("work-title");
-  std::string title = title_node ? title_node.text().as_string() : "Untitled";
+  std::string title =
+      (title_node != nullptr) ? title_node.text().as_string() : "Untitled";
 
   auto identification = root.child("identification");
   auto creator =
       identification.find_child_by_attribute("creator", "type", "composer");
-  std::string composer = creator ? creator.text().as_string() : "Unknown";
+  std::string composer =
+      (creator != nullptr) ? creator.text().as_string() : "Unknown";
 
-  return domain::Metadata(std::move(title), std::move(composer));
+  return {std::move(title), std::move(composer)};
 }
 
 // Extract time signature from attributes node
@@ -46,7 +48,7 @@ domain::TimeSignature extract_time_signature(const pugi::xml_node& attributes) {
   int numerator = time.child("beats").text().as_int(4);
   int denominator = time.child("beat-type").text().as_int(4);
 
-  return domain::TimeSignature(numerator, denominator);
+  return {numerator, denominator};
 }
 
 // Extract single note from XML node
@@ -89,7 +91,7 @@ domain::Note extract_note(const pugi::xml_node& note_node) {
   // Extract voice (default to 1)
   int voice = note_node.child("voice").text().as_int(1);
 
-  return domain::Note(pitch, octave, duration, is_rest, staff, voice);
+  return {pitch, octave, duration, is_rest, staff, voice};
 }
 
 // Container for measure data (both hands + metadata)
@@ -120,7 +122,7 @@ std::vector<domain::Slice> extract_slices_for_staff(
 
       if (is_chord) {
         // Add to current chord
-        current_chord.push_back(std::move(note));
+        current_chord.push_back(note);
       } else {
         // Finalize previous chord if exists
         if (!current_chord.empty()) {
@@ -128,7 +130,7 @@ std::vector<domain::Slice> extract_slices_for_staff(
           current_chord.clear();
         }
         // Start new chord with this note
-        current_chord.push_back(std::move(note));
+        current_chord.push_back(note);
       }
     } catch (const std::exception& e) {
       std::cerr << "Warning: Skipping note: " << e.what() << "\n";
@@ -153,10 +155,10 @@ MeasureData extract_measure(const pugi::xml_node& measure_node,
 
   // Check for time signature change
   auto attributes = measure_node.child("attributes");
-  if (attributes) {
-    data.time_sig = extract_time_signature(attributes);
-  } else {
+  if (attributes == nullptr) {
     data.time_sig = current_time_sig;
+  } else {
+    data.time_sig = extract_time_signature(attributes);
   }
 
   // Extract slices for both staves

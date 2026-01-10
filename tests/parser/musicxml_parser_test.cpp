@@ -2,9 +2,10 @@
 
 #include "parser/musicxml_parser.h"
 
+#include <gtest/gtest.h>
+
 #include <filesystem>
 #include <fstream>
-#include <gtest/gtest.h>
 #include <string>
 
 #include "domain/piece.h"
