@@ -252,16 +252,10 @@ double apply_two_note_rules(const std::vector<NoteInfo>& notes, size_t i,
                               weights, hand);
 }
 
-// Apply three-note rules for triplets
-double apply_three_note_rules(const std::vector<NoteInfo>& notes, size_t i,
-                              const config::DistanceMatrix& distances) {
-  if (i + 2 >= notes.size()) {
-    return 0.0;
-  }
-
-  const auto& n1 = notes[i];
-  const auto& n2 = notes[i + 1];
-  const auto& n3 = notes[i + 2];
+// Apply three-note rules on a triplet of consecutive notes
+double apply_triplet_penalties(const NoteInfo& n1, const NoteInfo& n2,
+                               const NoteInfo& n3,
+                               const config::DistanceMatrix& distances) {
   double penalty = 0.0;
 
   const auto& pair_distances =
@@ -280,6 +274,17 @@ double apply_three_note_rules(const std::vector<NoteInfo>& notes, size_t i,
   penalty += apply_rule_15(n1.finger, n2.finger, n1.pitch, n2.pitch);
 
   return penalty;
+}
+
+// Apply three-note rules for triplets (delegates to apply_triplet_penalties)
+double apply_three_note_rules(const std::vector<NoteInfo>& notes, size_t i,
+                              const config::DistanceMatrix& distances) {
+  if (i + 2 >= notes.size()) {
+    return 0.0;
+  }
+
+  return apply_triplet_penalties(notes[i], notes[i + 1], notes[i + 2],
+                                 distances);
 }
 
 }  // namespace
@@ -368,30 +373,6 @@ std::optional<NoteInfo> get_note_at_location(
   }
 
   return std::nullopt;
-}
-
-// Apply three-note rules on a triplet of consecutive notes
-double apply_triplet_penalties(const NoteInfo& n1, const NoteInfo& n2,
-                               const NoteInfo& n3,
-                               const config::DistanceMatrix& distances) {
-  double penalty = 0.0;
-
-  const auto& pair_distances =
-      distances.get_pair(finger_pair_from(n1.finger, n2.finger));
-  penalty += apply_rule_3(pair_distances, n1.pitch, n2.pitch, n3.pitch,
-                          n1.finger, n2.finger, n3.finger);
-
-  int span = n3.pitch - n1.pitch;
-  const auto& span_distances =
-      distances.get_pair(finger_pair_from(n1.finger, n3.finger));
-  penalty += apply_rule_4(span_distances, span);
-
-  penalty += apply_rule_12(n1.pitch, n2.pitch, n3.pitch, n1.finger, n2.finger,
-                           n3.finger);
-
-  penalty += apply_rule_15(n1.finger, n2.finger, n1.pitch, n2.pitch);
-
-  return penalty;
 }
 
 // Apply sequential rule penalties for a changed note in delta evaluation
