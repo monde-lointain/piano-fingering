@@ -88,9 +88,17 @@ domain::Note extract_note(const pugi::xml_node& note_node) {
   return domain::Note(pitch, octave, duration, is_rest, staff, voice);
 }
 
-// Extract all slices from a measure for a specific staff
-std::vector<domain::Slice> extract_measure(const pugi::xml_node& measure_node,
-                                           int staff_filter) {
+// Container for measure data (both hands + metadata)
+struct MeasureData {
+  std::vector<domain::Slice> rh_slices;
+  std::vector<domain::Slice> lh_slices;
+  domain::TimeSignature time_sig{4, 4};
+  int number = 1;
+};
+
+// Extract slices from a measure for a specific staff (helper)
+std::vector<domain::Slice> extract_slices_for_staff(
+    const pugi::xml_node& measure_node, int staff_filter) {
   std::vector<domain::Slice> slices;
   std::vector<domain::Note> current_chord;
 
@@ -131,6 +139,29 @@ std::vector<domain::Slice> extract_measure(const pugi::xml_node& measure_node,
   return slices;
 }
 
+// Extract measure data (both staves + metadata)
+MeasureData extract_measure(const pugi::xml_node& measure_node,
+                            domain::TimeSignature current_time_sig) {
+  MeasureData data;
+
+  // Extract measure number
+  data.number = measure_node.attribute("number").as_int(1);
+
+  // Check for time signature change
+  auto attributes = measure_node.child("attributes");
+  if (attributes) {
+    data.time_sig = extract_time_signature(attributes);
+  } else {
+    data.time_sig = current_time_sig;
+  }
+
+  // Extract slices for both staves
+  data.rh_slices = extract_slices_for_staff(measure_node, 1);
+  data.lh_slices = extract_slices_for_staff(measure_node, 2);
+
+  return data;
+}
+
 }  // namespace
 
 MusicXMLParser::ParseResult MusicXMLParser::parse(
@@ -167,26 +198,16 @@ MusicXMLParser::ParseResult MusicXMLParser::parse(
   domain::TimeSignature current_time_sig = domain::common_time();
 
   for (auto measure_node : part.children("measure")) {
-    int measure_number = measure_node.attribute("number").as_int(1);
+    auto data = extract_measure(measure_node, current_time_sig);
+    current_time_sig = data.time_sig;
 
-    // Update time signature if attributes present
-    auto attributes = measure_node.child("attributes");
-    if (attributes) {
-      current_time_sig = extract_time_signature(attributes);
+    if (!data.rh_slices.empty()) {
+      right_hand_measures.emplace_back(data.number, std::move(data.rh_slices),
+                                       data.time_sig);
     }
-
-    // Extract slices for staff 1 (right hand)
-    auto right_slices = extract_measure(measure_node, 1);
-    if (!right_slices.empty()) {
-      right_hand_measures.emplace_back(measure_number, std::move(right_slices),
-                                       current_time_sig);
-    }
-
-    // Extract slices for staff 2 (left hand)
-    auto left_slices = extract_measure(measure_node, 2);
-    if (!left_slices.empty()) {
-      left_hand_measures.emplace_back(measure_number, std::move(left_slices),
-                                      current_time_sig);
+    if (!data.lh_slices.empty()) {
+      left_hand_measures.emplace_back(data.number, std::move(data.lh_slices),
+                                      data.time_sig);
     }
   }
 
