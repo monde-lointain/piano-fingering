@@ -37,52 +37,65 @@ ScoreEvaluator& ScoreEvaluator::operator=(ScoreEvaluator&&) noexcept = default;
 
 namespace {
 
+// Template to iterate over playable slices (non-empty, with non-rest notes)
+// Invokes callback for each playable slice with (slice, fingering_idx,
+// measure_idx, slice_idx) Stops when fingering_idx reaches fingerings.size()
+template <typename Callback>
+void for_each_playable_slice(const std::vector<domain::Measure>& measures,
+                             const std::vector<domain::Fingering>& fingerings,
+                             Callback callback) {
+  size_t fingering_idx = 0;
+  size_t measure_idx = 0;
+
+  for (const auto& measure : measures) {
+    size_t slice_idx = 0;
+    for (const auto& slice : measure) {
+      if (!slice.empty()) {
+        bool has_non_rest =
+            std::any_of(slice.begin(), slice.end(),
+                        [](const auto& note) { return !note.is_rest(); });
+        if (has_non_rest) {
+          if (fingering_idx >= fingerings.size()) {
+            return;
+          }
+          callback(slice, fingering_idx, measure_idx, slice_idx);
+          ++fingering_idx;
+        }
+      }
+      ++slice_idx;
+    }
+    ++measure_idx;
+  }
+}
+
 // Extract first non-rest note from each slice with fingering
 // For sequential rules, only the first note per slice is considered;
 // chord-internal rules are handled separately by process_chord_slice()
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 std::vector<NoteInfo> collect_notes(
     const std::vector<domain::Measure>& measures,
     const std::vector<domain::Fingering>& fingerings) {
   std::vector<NoteInfo> notes;
-  size_t fingering_idx = 0;
 
-  for (const auto& measure : measures) {
-    for (const auto& slice : measure) {
-      if (slice.empty()) {
-        continue;
-      }
-
-      bool has_non_rest =
-          std::any_of(slice.begin(), slice.end(),
-                      [](const auto& note) { return !note.is_rest(); });
-      if (!has_non_rest) {
-        continue;
-      }
-
-      if (fingering_idx >= fingerings.size()) {
-        break;
-      }
-
-      const auto& slice_fingering = fingerings[fingering_idx];
-      size_t note_idx = 0;
-      for (const auto& note : slice) {
-        if (!note.is_rest()) {
-          if (note_idx < slice_fingering.size()) {
-            const auto& finger_opt = slice_fingering[note_idx];
-            if (finger_opt.has_value()) {
-              notes.push_back({*finger_opt, note.absolute_pitch(),
-                               note.pitch().is_black_key()});
-              break;  // Only take first note per slice for sequential rules
+  for_each_playable_slice(
+      measures, fingerings,
+      [&notes, &fingerings](const domain::Slice& slice, size_t fingering_idx,
+                            size_t /*measure_idx*/, size_t /*slice_idx*/) {
+        const auto& slice_fingering = fingerings[fingering_idx];
+        size_t note_idx = 0;
+        for (const auto& note : slice) {
+          if (!note.is_rest()) {
+            if (note_idx < slice_fingering.size()) {
+              const auto& finger_opt = slice_fingering[note_idx];
+              if (finger_opt.has_value()) {
+                notes.push_back({*finger_opt, note.absolute_pitch(),
+                                 note.pitch().is_black_key()});
+                break;  // Only take first note per slice for sequential rules
+              }
             }
+            ++note_idx;
           }
-          ++note_idx;
         }
-      }
-
-      ++fingering_idx;
-    }
-  }
+      });
 
   return notes;
 }
@@ -128,33 +141,17 @@ double apply_chord_penalties(const std::vector<domain::Measure>& measures,
                              const config::DistanceMatrix& distances,
                              const config::RuleWeights& weights) {
   double penalty = 0.0;
-  size_t fingering_idx = 0;
 
-  for (const auto& measure : measures) {
-    for (const auto& slice : measure) {
-      if (slice.empty()) {
-        continue;
-      }
-
-      bool has_non_rest =
-          std::any_of(slice.begin(), slice.end(),
-                      [](const auto& note) { return !note.is_rest(); });
-      if (!has_non_rest) {
-        continue;
-      }
-
-      if (fingering_idx >= fingerings.size()) {
-        break;
-      }
-
-      if (slice.size() > 1) {
-        penalty += process_chord_slice(slice, fingerings[fingering_idx],
-                                       distances, weights);
-      }
-
-      ++fingering_idx;
-    }
-  }
+  for_each_playable_slice(measures, fingerings,
+                          [&penalty, &fingerings, &distances, &weights](
+                              const domain::Slice& slice, size_t fingering_idx,
+                              size_t /*measure_idx*/, size_t /*slice_idx*/) {
+                            if (slice.size() > 1) {
+                              penalty += process_chord_slice(
+                                  slice, fingerings[fingering_idx], distances,
+                                  weights);
+                            }
+                          });
 
   return penalty;
 }
@@ -177,47 +174,29 @@ Rule11Params compute_rule11_params(const NoteInfo& n1, const NoteInfo& n2) {
 }
 
 // Apply single-note rules to all notes (including all notes in chords)
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 double apply_single_note_rules(
     const std::vector<domain::Measure>& measures,
     const std::vector<domain::Fingering>& fingerings) {
   double penalty = 0.0;
-  size_t fingering_idx = 0;
 
-  for (const auto& measure : measures) {
-    for (const auto& slice : measure) {
-      if (slice.empty()) {
-        continue;
-      }
-
-      bool has_non_rest =
-          std::any_of(slice.begin(), slice.end(),
-                      [](const auto& note) { return !note.is_rest(); });
-      if (!has_non_rest) {
-        continue;
-      }
-
-      if (fingering_idx >= fingerings.size()) {
-        break;
-      }
-
-      const auto& slice_fingering = fingerings[fingering_idx];
-      size_t note_idx = 0;
-      for (const auto& note : slice) {
-        if (!note.is_rest()) {
-          if (note_idx < slice_fingering.size()) {
-            const auto& finger_opt = slice_fingering[note_idx];
-            if (finger_opt.has_value()) {
-              penalty += apply_rule_5(*finger_opt);
+  for_each_playable_slice(
+      measures, fingerings,
+      [&penalty, &fingerings](const domain::Slice& slice, size_t fingering_idx,
+                              size_t /*measure_idx*/, size_t /*slice_idx*/) {
+        const auto& slice_fingering = fingerings[fingering_idx];
+        size_t note_idx = 0;
+        for (const auto& note : slice) {
+          if (!note.is_rest()) {
+            if (note_idx < slice_fingering.size()) {
+              const auto& finger_opt = slice_fingering[note_idx];
+              if (finger_opt.has_value()) {
+                penalty += apply_rule_5(*finger_opt);
+              }
             }
+            ++note_idx;
           }
-          ++note_idx;
         }
-      }
-
-      ++fingering_idx;
-    }
-  }
+      });
 
   return penalty;
 }
