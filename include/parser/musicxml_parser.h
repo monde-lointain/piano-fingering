@@ -3,7 +3,6 @@
 
 #include <filesystem>
 #include <memory>
-
 #include <pugixml.hpp>
 
 #include "domain/piece.h"

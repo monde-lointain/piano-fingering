@@ -1,9 +1,11 @@
-// include/parser/pitch_mapping.h - Pitch mapping from MusicXML to modified system
+// include/parser/pitch_mapping.h - Pitch mapping from MusicXML to modified
+// system
 #ifndef PFING_PARSER_PITCH_MAPPING_H_
 #define PFING_PARSER_PITCH_MAPPING_H_
 
-#include "domain/pitch.h"
 #include <stdexcept>
+
+#include "domain/pitch.h"
 
 namespace piano_fingering::parser {
 

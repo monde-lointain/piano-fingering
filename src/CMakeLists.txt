@@ -28,6 +28,19 @@ target_link_libraries(evaluator
   PUBLIC config
 )
 
+# Parser library
+add_library(parser STATIC
+  parser/musicxml_parser.cpp
+)
+
+target_include_directories(parser
+  PUBLIC ${CMAKE_SOURCE_DIR}/include
+)
+
+target_link_libraries(parser
+  PUBLIC pugixml
+)
+
 # Main executable
 add_executable(piano-fingering
   main.cpp
