@@ -447,6 +447,32 @@ std::optional<std::pair<NoteInfo, NoteInfo>> get_changed_notes_or_fallback(
   return std::make_pair(*old_changed_opt, *new_changed_opt);
 }
 
+// Update evaluation cache with current notes and metadata
+// Used after evaluate() to enable delta evaluation optimization
+template <typename CacheType>
+void update_evaluation_cache(CacheType* cache, std::vector<NoteInfo> notes,
+                             size_t fingerings_size, domain::Hand hand) {
+  if (!cache) {
+    return;
+  }
+  cache->notes = std::move(notes);
+  cache->fingerings_size = fingerings_size;
+  cache->hand = hand;
+}
+
+// Get cached notes if cache is valid for current evaluation context
+// Returns cached notes if available and valid, nullopt otherwise
+template <typename CacheType>
+std::optional<std::vector<NoteInfo>> get_cached_notes(const CacheType* cache,
+                                                      size_t fingerings_size,
+                                                      domain::Hand hand) {
+  if (cache && cache->fingerings_size == fingerings_size &&
+      cache->hand == hand) {
+    return cache->notes;
+  }
+  return std::nullopt;
+}
+
 // Get note lists for delta evaluation (uses cache if available)
 // Returns pair of <old_notes, new_notes>
 // Template to avoid referencing private CacheData type in signature
@@ -457,17 +483,11 @@ get_note_lists_for_delta(
     const std::vector<domain::Fingering>& current_fingerings,
     const std::vector<domain::Fingering>& proposed_fingerings,
     domain::Hand hand) {
-  std::vector<NoteInfo> old_notes;
-
-  // Use cached old_notes if available (cache hit = O(1), miss = O(S))
-  if (cache && cache->fingerings_size == current_fingerings.size() &&
-      cache->hand == hand) {
-    // Cache hit - O(1) access
-    old_notes = cache->notes;
-  } else {
-    // Cache miss - rebuild O(S)
-    old_notes = collect_notes(measures, current_fingerings);
-  }
+  // Try to get cached old_notes (cache hit = O(1), miss = O(S))
+  auto cached_notes = get_cached_notes(cache, current_fingerings.size(), hand);
+  std::vector<NoteInfo> old_notes =
+      cached_notes.has_value() ? std::move(*cached_notes)
+                               : collect_notes(measures, current_fingerings);
 
   // Build new_notes - O(S) one-time cost
   auto new_notes = collect_notes(measures, proposed_fingerings);
@@ -542,13 +562,12 @@ double ScoreEvaluator::evaluate(
   total_penalty +=
       apply_chord_penalties(measures, fingerings, ctx.distances, ctx.weights);
 
-  // Cache for delta evaluation
+  // Update cache for delta evaluation
   if (!cache_) {
     cache_ = std::make_unique<CacheData>();
   }
-  cache_->notes = std::move(notes);
-  cache_->fingerings_size = fingerings.size();
-  cache_->hand = hand;
+  update_evaluation_cache(cache_.get(), std::move(notes), fingerings.size(),
+                          hand);
 
   return total_penalty;
 }
