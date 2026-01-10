@@ -76,12 +76,18 @@ gtest_discover_tests(evaluator_test)
 # Parser module tests
 add_executable(parser_test
   parser/pitch_mapping_test.cpp
+  parser/musicxml_parser_test.cpp
+  parser/golden_set_test.cpp
 )
 target_include_directories(parser_test
   PRIVATE ${CMAKE_SOURCE_DIR}/include
 )
+target_compile_definitions(parser_test
+  PRIVATE BASELINE_DIR="${CMAKE_SOURCE_DIR}/tests/baseline"
+)
 target_link_libraries(parser_test
   PRIVATE
+    parser
     GTest::gtest
     GTest::gtest_main
 )
