@@ -284,49 +284,6 @@ double apply_three_note_rules(const std::vector<NoteInfo>& notes, size_t i,
                                  distances);
 }
 
-}  // namespace
-
-double ScoreEvaluator::evaluate(
-    const domain::Piece& piece,
-    const std::vector<domain::Fingering>& fingerings, domain::Hand hand) const {
-  const auto& distances =
-      (hand == domain::Hand::kLeft) ? config_->left_hand : config_->right_hand;
-  const auto& weights = config_->weights;
-  const auto& measures =
-      (hand == domain::Hand::kLeft) ? piece.left_hand() : piece.right_hand();
-
-  EvaluationContext ctx{distances, weights, hand};
-
-  auto notes = collect_notes(measures, fingerings);
-
-  double total_penalty = 0.0;
-
-  // Apply single-note rules to all notes (including all notes in chords)
-  total_penalty += apply_single_note_rules(measures, fingerings);
-
-  // Apply sequential rules only if we have multiple notes
-  if (notes.size() > 1) {
-    for (size_t i = 0; i < notes.size(); ++i) {
-      total_penalty += apply_two_note_rules(notes, i, ctx);
-      total_penalty += apply_three_note_rules(notes, i, ctx.distances);
-    }
-  }
-
-  // Always apply chord penalties (independent of sequential notes)
-  total_penalty +=
-      apply_chord_penalties(measures, fingerings, ctx.distances, ctx.weights);
-
-  // Cache for delta evaluation
-  if (!cache_) {
-    cache_ = std::make_unique<CacheData>();
-  }
-  cache_->notes = std::move(notes);
-  cache_->fingerings_size = fingerings.size();
-  cache_->hand = hand;
-
-  return total_penalty;
-}
-
 // Get NoteInfo at a specific slice location - O(1) direct access
 std::optional<NoteInfo> get_note_at_location(
     const std::vector<domain::Measure>& measures,
@@ -459,50 +416,54 @@ void apply_chord_penalties_for_delta(
       weights);
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
-double ScoreEvaluator::evaluate_delta(
-    const domain::Piece& piece,
+// Compute full evaluation fallback for delta evaluation
+// Used when delta evaluation cannot proceed due to invalid state
+double compute_full_evaluation_fallback(
+    const ScoreEvaluator& evaluator, const domain::Piece& piece,
     const std::vector<domain::Fingering>& current_fingerings,
     const std::vector<domain::Fingering>& proposed_fingerings,
-    const SliceLocation& changed_location, domain::Hand hand) const {
-  const auto& distances =
-      (hand == domain::Hand::kLeft) ? config_->left_hand : config_->right_hand;
-  const auto& weights = config_->weights;
-  const auto& measures =
-      (hand == domain::Hand::kLeft) ? piece.left_hand() : piece.right_hand();
+    domain::Hand hand) {
+  double new_score = evaluator.evaluate(piece, proposed_fingerings, hand);
+  double old_score = evaluator.evaluate(piece, current_fingerings, hand);
+  return new_score - old_score;
+}
 
-  EvaluationContext ctx{distances, weights, hand};
-
-  // Get the changed note info - O(1) access to slice
+// Get changed notes (old and new) or return nullopt on invalid location
+// Returns pair of <old_changed, new_changed> if both are valid
+std::optional<std::pair<NoteInfo, NoteInfo>> get_changed_notes_or_fallback(
+    const std::vector<domain::Measure>& measures,
+    const std::vector<domain::Fingering>& current_fingerings,
+    const std::vector<domain::Fingering>& proposed_fingerings,
+    const ScoreEvaluator::SliceLocation& changed_location) {
   auto old_changed_opt =
       get_note_at_location(measures, current_fingerings, changed_location);
   auto new_changed_opt =
       get_note_at_location(measures, proposed_fingerings, changed_location);
 
   if (!old_changed_opt.has_value() || !new_changed_opt.has_value()) {
-    // Invalid location or missing fingering - fallback to full evaluation
-    double new_score = evaluate(piece, proposed_fingerings, hand);
-    double old_score = evaluate(piece, current_fingerings, hand);
-    return new_score - old_score;
+    return std::nullopt;
   }
 
-  const auto& old_changed = *old_changed_opt;
-  const auto& new_changed = *new_changed_opt;
+  return std::make_pair(*old_changed_opt, *new_changed_opt);
+}
 
-  double delta = 0.0;
-  double old_penalty = 0.0;
-  double new_penalty = 0.0;
-
-  // Rule 5: changed note only - O(1)
-  old_penalty += apply_rule_5(old_changed.finger);
-  new_penalty += apply_rule_5(new_changed.finger);
+// Get note lists for delta evaluation (uses cache if available)
+// Returns pair of <old_notes, new_notes>
+// Template to avoid referencing private CacheData type in signature
+template <typename CacheType>
+std::pair<std::vector<NoteInfo>, std::vector<NoteInfo>>
+get_note_lists_for_delta(
+    const CacheType* cache, const std::vector<domain::Measure>& measures,
+    const std::vector<domain::Fingering>& current_fingerings,
+    const std::vector<domain::Fingering>& proposed_fingerings,
+    domain::Hand hand) {
+  std::vector<NoteInfo> old_notes;
 
   // Use cached old_notes if available (cache hit = O(1), miss = O(S))
-  std::vector<NoteInfo> old_notes;
-  if (cache_ && cache_->fingerings_size == current_fingerings.size() &&
-      cache_->hand == hand) {
+  if (cache && cache->fingerings_size == current_fingerings.size() &&
+      cache->hand == hand) {
     // Cache hit - O(1) access
-    old_notes = cache_->notes;
+    old_notes = cache->notes;
   } else {
     // Cache miss - rebuild O(S)
     old_notes = collect_notes(measures, current_fingerings);
@@ -511,32 +472,127 @@ double ScoreEvaluator::evaluate_delta(
   // Build new_notes - O(S) one-time cost
   auto new_notes = collect_notes(measures, proposed_fingerings);
 
-  size_t idx = changed_location.fingering_idx;
+  return {std::move(old_notes), std::move(new_notes)};
+}
 
-  // Verify we have valid notes at the changed index
-  if (idx >= old_notes.size() || idx >= new_notes.size()) {
-    // Fallback to full evaluation
-    double new_score = evaluate(piece, proposed_fingerings, hand);
-    double old_score = evaluate(piece, current_fingerings, hand);
-    return new_score - old_score;
-  }
+// Compute penalty delta for a changed note
+// Computes old_penalty and new_penalty, returns delta (new - old)
+template <typename CacheType>
+double compute_penalty_delta(
+    const NoteInfo& old_changed, const NoteInfo& new_changed,
+    const std::vector<NoteInfo>& old_notes,
+    const std::vector<NoteInfo>& new_notes,
+    const ScoreEvaluator::SliceLocation& changed_location,
+    const std::vector<domain::Measure>& measures,
+    const std::vector<domain::Fingering>& current_fingerings,
+    const std::vector<domain::Fingering>& proposed_fingerings,
+    const EvaluationContext& ctx) {
+  double old_penalty = 0.0;
+  double new_penalty = 0.0;
 
-  // Only apply sequential rules if the changed note is the first note in its
-  // slice (i.e., if note_idx_in_slice == 0). Otherwise, it's an internal chord
-  // note and sequential rules don't apply to it.
+  // Rule 5: single-note penalty (O(1))
+  old_penalty += apply_rule_5(old_changed.finger);
+  new_penalty += apply_rule_5(new_changed.finger);
+
+  // Sequential rules: only for first note in slice
   if (changed_location.note_idx_in_slice == 0) {
+    size_t idx = changed_location.fingering_idx;
     apply_sequential_penalties_for_delta(idx, old_changed, new_changed,
                                          old_notes, new_notes, ctx, old_penalty,
                                          new_penalty);
   }
 
-  // Chord rules (Rule 14): if changed slice is a chord
+  // Chord rules (Rule 14)
   apply_chord_penalties_for_delta(
       changed_location, measures, current_fingerings, proposed_fingerings,
       ctx.distances, ctx.weights, old_penalty, new_penalty);
 
-  delta = new_penalty - old_penalty;
-  return delta;
+  return new_penalty - old_penalty;
+}
+
+}  // namespace
+
+double ScoreEvaluator::evaluate(
+    const domain::Piece& piece,
+    const std::vector<domain::Fingering>& fingerings, domain::Hand hand) const {
+  const auto& distances =
+      (hand == domain::Hand::kLeft) ? config_->left_hand : config_->right_hand;
+  const auto& weights = config_->weights;
+  const auto& measures =
+      (hand == domain::Hand::kLeft) ? piece.left_hand() : piece.right_hand();
+
+  EvaluationContext ctx{distances, weights, hand};
+
+  auto notes = collect_notes(measures, fingerings);
+
+  double total_penalty = 0.0;
+
+  // Apply single-note rules to all notes (including all notes in chords)
+  total_penalty += apply_single_note_rules(measures, fingerings);
+
+  // Apply sequential rules only if we have multiple notes
+  if (notes.size() > 1) {
+    for (size_t i = 0; i < notes.size(); ++i) {
+      total_penalty += apply_two_note_rules(notes, i, ctx);
+      total_penalty += apply_three_note_rules(notes, i, ctx.distances);
+    }
+  }
+
+  // Always apply chord penalties (independent of sequential notes)
+  total_penalty +=
+      apply_chord_penalties(measures, fingerings, ctx.distances, ctx.weights);
+
+  // Cache for delta evaluation
+  if (!cache_) {
+    cache_ = std::make_unique<CacheData>();
+  }
+  cache_->notes = std::move(notes);
+  cache_->fingerings_size = fingerings.size();
+  cache_->hand = hand;
+
+  return total_penalty;
+}
+
+double ScoreEvaluator::evaluate_delta(
+    const domain::Piece& piece,
+    const std::vector<domain::Fingering>& current_fingerings,
+    const std::vector<domain::Fingering>& proposed_fingerings,
+    const SliceLocation& changed_location, domain::Hand hand) const {
+  // Setup context and measures
+  const auto& distances =
+      (hand == domain::Hand::kLeft) ? config_->left_hand : config_->right_hand;
+  const auto& weights = config_->weights;
+  const auto& measures =
+      (hand == domain::Hand::kLeft) ? piece.left_hand() : piece.right_hand();
+
+  EvaluationContext ctx{distances, weights, hand};
+
+  // Get changed notes (O(1) direct access)
+  auto changed_notes = get_changed_notes_or_fallback(
+      measures, current_fingerings, proposed_fingerings, changed_location);
+
+  if (!changed_notes.has_value()) {
+    return compute_full_evaluation_fallback(*this, piece, current_fingerings,
+                                            proposed_fingerings, hand);
+  }
+
+  const auto& [old_changed, new_changed] = *changed_notes;
+
+  // Get note lists (uses cache when possible)
+  auto [old_notes, new_notes] = get_note_lists_for_delta(
+      cache_.get(), measures, current_fingerings, proposed_fingerings, hand);
+
+  // Verify valid notes at changed index
+  if (changed_location.fingering_idx >= old_notes.size() ||
+      changed_location.fingering_idx >= new_notes.size()) {
+    return compute_full_evaluation_fallback(*this, piece, current_fingerings,
+                                            proposed_fingerings, hand);
+  }
+
+  // Compute penalty delta
+  return compute_penalty_delta<CacheData>(
+      old_changed, new_changed, old_notes, new_notes, changed_location,
+      measures, current_fingerings, proposed_fingerings, ctx);
 }
 
 }  // namespace piano_fingering::evaluator
