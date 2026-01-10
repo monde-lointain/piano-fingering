@@ -86,5 +86,14 @@ TEST(SliceTest, StreamOutput) {
   EXPECT_TRUE(output.find("2 notes") != std::string::npos);
 }
 
+TEST(SliceTest, ConstructFromVector) {
+  std::vector<Note> notes = {
+      Note(Pitch(0), 4, 480, false, 1, 1),
+      Note(Pitch(4), 4, 480, false, 1, 1),
+  };
+  Slice slice(std::move(notes));
+  EXPECT_EQ(slice.size(), 2);
+}
+
 }  // namespace
 }  // namespace piano_fingering::domain

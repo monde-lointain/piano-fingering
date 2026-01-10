@@ -23,6 +23,16 @@ class Piece {
     }
   }
 
+  Piece(Metadata metadata, std::vector<Measure> left_hand,
+        std::vector<Measure> right_hand)
+      : metadata_(std::move(metadata)),
+        left_hand_(std::move(left_hand)),
+        right_hand_(std::move(right_hand)) {
+    if (left_hand_.empty() && right_hand_.empty()) {
+      throw std::invalid_argument("Piece must have at least one measure");
+    }
+  }
+
   [[nodiscard]] const Metadata& metadata() const noexcept { return metadata_; }
   [[nodiscard]] const std::vector<Measure>& left_hand() const noexcept {
     return left_hand_;

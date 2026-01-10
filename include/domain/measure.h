@@ -23,6 +23,15 @@ class Measure {
     }
   }
 
+  Measure(int number, std::vector<Slice> slices, TimeSignature time_signature)
+      : number_(validate_number(number)),
+        slices_(std::move(slices)),
+        time_signature_(time_signature) {
+    if (slices_.empty()) {
+      throw std::invalid_argument("Measure must contain at least one slice");
+    }
+  }
+
   [[nodiscard]] int number() const noexcept { return number_; }
   [[nodiscard]] size_t size() const noexcept { return slices_.size(); }
   [[nodiscard]] TimeSignature time_signature() const noexcept {

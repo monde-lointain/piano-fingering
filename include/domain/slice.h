@@ -25,6 +25,13 @@ class Slice {
     std::sort(notes_.begin(), notes_.end());
   }
 
+  explicit Slice(std::vector<Note> notes) : notes_(std::move(notes)) {
+    if (notes_.size() > kMaxNotesPerSlice) {
+      throw std::invalid_argument("Slice cannot contain more than 5 notes");
+    }
+    std::sort(notes_.begin(), notes_.end());
+  }
+
   [[nodiscard]] size_t size() const noexcept { return notes_.size(); }
   [[nodiscard]] bool empty() const noexcept { return notes_.empty(); }
 

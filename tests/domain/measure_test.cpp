@@ -101,5 +101,13 @@ TEST(MeasureTest, StreamOutput) {
   EXPECT_TRUE(output.find("1") != std::string::npos);
 }
 
+TEST(MeasureTest, ConstructFromVector) {
+  std::vector<Slice> slices = {
+      Slice({Note(Pitch(0), 4, 480, false, 1, 1)}),
+  };
+  Measure measure(1, std::move(slices), TimeSignature(4, 4));
+  EXPECT_EQ(measure.size(), 1);
+}
+
 }  // namespace
 }  // namespace piano_fingering::domain

@@ -130,5 +130,15 @@ TEST(PieceTest, StreamOutput) {
   EXPECT_TRUE(output.find("Piece") != std::string::npos);
 }
 
+TEST(PieceTest, ConstructFromVectors) {
+  std::vector<Measure> left = {};
+  std::vector<Measure> right = {
+      Measure(1, {Slice({Note(Pitch(0), 4, 480, false, 1, 1)})},
+              TimeSignature(4, 4)),
+  };
+  Piece piece(Metadata("Title", "Composer"), std::move(left), std::move(right));
+  EXPECT_EQ(piece.right_hand().size(), 1);
+}
+
 }  // namespace
 }  // namespace piano_fingering::domain
