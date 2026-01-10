@@ -21,6 +21,16 @@ struct TripletContext {
   domain::Finger f3;
 };
 
+// Parameter object for Rule 11 (two-note comparison)
+struct Rule11Params {
+  int lower_pitch;
+  bool lower_black;
+  domain::Finger lower_finger;
+  int higher_pitch;
+  bool higher_black;
+  domain::Finger higher_finger;
+};
+
 [[nodiscard]] config::FingerPair finger_pair_from(domain::Finger f1,
                                                   domain::Finger f2);
 
@@ -46,10 +56,7 @@ struct TripletContext {
                                int pitch2, domain::Hand hand);
 [[nodiscard]] double apply_rule_10(bool is_crossing, bool note1_black,
                                    bool note2_black);
-[[nodiscard]] double apply_rule_11(int lower_pitch, bool lower_black,
-                                   domain::Finger lower_finger,
-                                   int higher_pitch, bool higher_black,
-                                   domain::Finger higher_finger);
+[[nodiscard]] double apply_rule_11(const Rule11Params& params);
 
 [[nodiscard]] bool is_monotonic(int p1, int p2, int p3);
 

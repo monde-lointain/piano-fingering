@@ -167,20 +167,11 @@ double apply_chord_penalties(const std::vector<domain::Measure>& measures,
 }
 
 // Compute Rule 11 parameters from two notes
-struct Rule11Params {
-  int lower_pitch;
-  int higher_pitch;
-  bool lower_black;
-  bool higher_black;
-  domain::Finger lower_finger;
-  domain::Finger higher_finger;
-};
-
 Rule11Params compute_rule11_params(const NoteInfo& n1, const NoteInfo& n2) {
   if (n1.pitch < n2.pitch) {
-    return {n1.pitch, n2.pitch, n1.is_black, n2.is_black, n1.finger, n2.finger};
+    return {n1.pitch, n1.is_black, n1.finger, n2.pitch, n2.is_black, n2.finger};
   }
-  return {n2.pitch, n1.pitch, n2.is_black, n1.is_black, n2.finger, n1.finger};
+  return {n2.pitch, n2.is_black, n2.finger, n1.pitch, n1.is_black, n1.finger};
 }
 
 // Apply single-note rules to all notes (including all notes in chords)
@@ -234,9 +225,7 @@ double apply_pair_penalties(const NoteInfo& n1, const NoteInfo& n2,
   penalty += apply_rule_10(crossing, n1.is_black, n2.is_black);
 
   auto params = compute_rule11_params(n1, n2);
-  penalty += apply_rule_11(params.lower_pitch, params.lower_black,
-                           params.lower_finger, params.higher_pitch,
-                           params.higher_black, params.higher_finger);
+  penalty += apply_rule_11(params);
 
   const auto& pair_distances =
       ctx.distances.get_pair(finger_pair_from(n1.finger, n2.finger));

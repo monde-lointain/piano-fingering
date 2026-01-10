@@ -168,13 +168,15 @@ TEST(RulesTest, Rule11ThumbBlackNonThumbWhite) {
   // Lower pitch white (non-thumb), higher pitch black (thumb) = Rule 11
   // Table 2 spec: Score = +2
   EXPECT_DOUBLE_EQ(
-      apply_rule_11(60, false, Finger::kIndex, 65, true, Finger::kThumb), 2.0);
+      apply_rule_11({60, false, Finger::kIndex, 65, true, Finger::kThumb}),
+      2.0);
   // Thumb white: no penalty
   EXPECT_DOUBLE_EQ(
-      apply_rule_11(60, false, Finger::kIndex, 65, false, Finger::kThumb), 0.0);
+      apply_rule_11({60, false, Finger::kIndex, 65, false, Finger::kThumb}),
+      0.0);
   // Non-thumb black: no penalty
   EXPECT_DOUBLE_EQ(
-      apply_rule_11(60, true, Finger::kIndex, 65, true, Finger::kThumb), 0.0);
+      apply_rule_11({60, true, Finger::kIndex, 65, true, Finger::kThumb}), 0.0);
 }
 
 TEST(RulesTest, IsMonotonicAscending) {
