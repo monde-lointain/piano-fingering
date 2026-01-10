@@ -17,15 +17,15 @@ TEST(PitchMappingTest, BasicNaturalPitches) {
 }
 
 TEST(PitchMappingTest, SharpPitches) {
-  EXPECT_EQ(map_musicxml_pitch_to_modified('C', 1), 1);   // C#
-  EXPECT_EQ(map_musicxml_pitch_to_modified('F', 1), 7);   // F#
-  EXPECT_EQ(map_musicxml_pitch_to_modified('G', 1), 8);   // G#
+  EXPECT_EQ(map_musicxml_pitch_to_modified('C', 1), 1);  // C#
+  EXPECT_EQ(map_musicxml_pitch_to_modified('F', 1), 7);  // F#
+  EXPECT_EQ(map_musicxml_pitch_to_modified('G', 1), 8);  // G#
 }
 
 TEST(PitchMappingTest, FlatPitches) {
-  EXPECT_EQ(map_musicxml_pitch_to_modified('D', -1), 1);  // Db
-  EXPECT_EQ(map_musicxml_pitch_to_modified('E', -1), 3);  // Eb
-  EXPECT_EQ(map_musicxml_pitch_to_modified('B', -1), 10); // Bb
+  EXPECT_EQ(map_musicxml_pitch_to_modified('D', -1), 1);   // Db
+  EXPECT_EQ(map_musicxml_pitch_to_modified('E', -1), 3);   // Eb
+  EXPECT_EQ(map_musicxml_pitch_to_modified('B', -1), 10);  // Bb
 }
 
 TEST(PitchMappingTest, DoubleAlterations) {
@@ -35,8 +35,8 @@ TEST(PitchMappingTest, DoubleAlterations) {
 }
 
 TEST(PitchMappingTest, NegativeWrapping) {
-  EXPECT_EQ(map_musicxml_pitch_to_modified('C', -1), 13); // Cb wraps to 13
-  EXPECT_EQ(map_musicxml_pitch_to_modified('C', -2), 12); // Cbb wraps to 12
+  EXPECT_EQ(map_musicxml_pitch_to_modified('C', -1), 13);  // Cb wraps to 13
+  EXPECT_EQ(map_musicxml_pitch_to_modified('C', -2), 12);  // Cbb wraps to 12
 }
 
 }  // namespace
