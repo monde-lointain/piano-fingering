@@ -37,6 +37,14 @@ ScoreEvaluator& ScoreEvaluator::operator=(ScoreEvaluator&&) noexcept = default;
 
 namespace {
 
+// Evaluation context grouping related parameters
+struct EvaluationContext {
+  // References intentional for short-lived aggregation
+  const config::DistanceMatrix& distances;  // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
+  const config::RuleWeights& weights;  // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
+  domain::Hand hand;
+};
+
 // Template to iterate over playable slices (non-empty, with non-rest notes)
 // Invokes callback for each playable slice with (slice, fingering_idx,
 // measure_idx, slice_idx) Stops when fingering_idx reaches fingerings.size()
@@ -204,9 +212,7 @@ double apply_single_note_rules(
 // Apply two-note rules between a pair of consecutive notes
 double apply_pair_penalties(const NoteInfo& n1, const NoteInfo& n2,
                             const NoteInfo* prev_note,
-                            const config::DistanceMatrix& distances,
-                            const config::RuleWeights& weights,
-                            domain::Hand hand) {
+                            const EvaluationContext& ctx) {
   double penalty = 0.0;
 
   penalty += apply_rule_6(n1.finger, n2.finger);
@@ -221,7 +227,8 @@ double apply_pair_penalties(const NoteInfo& n1, const NoteInfo& n2,
   penalty += apply_rule_9(n1.finger, n1.is_black, n2.is_black);
   penalty += apply_rule_9(n2.finger, n2.is_black, n1.is_black);
 
-  bool crossing = is_crossing(n1.finger, n1.pitch, n2.finger, n2.pitch, hand);
+  bool crossing =
+      is_crossing(n1.finger, n1.pitch, n2.finger, n2.pitch, ctx.hand);
   penalty += apply_rule_10(crossing, n1.is_black, n2.is_black);
 
   auto params = compute_rule11_params(n1, n2);
@@ -230,9 +237,10 @@ double apply_pair_penalties(const NoteInfo& n1, const NoteInfo& n2,
                            params.higher_black, params.higher_finger);
 
   const auto& pair_distances =
-      distances.get_pair(finger_pair_from(n1.finger, n2.finger));
+      ctx.distances.get_pair(finger_pair_from(n1.finger, n2.finger));
   int actual_distance = n2.pitch - n1.pitch;
-  penalty += apply_cascading_penalty(pair_distances, actual_distance, weights);
+  penalty +=
+      apply_cascading_penalty(pair_distances, actual_distance, ctx.weights);
 
   return penalty;
 }
@@ -240,16 +248,13 @@ double apply_pair_penalties(const NoteInfo& n1, const NoteInfo& n2,
 // Apply two-note rules between consecutive notes (delegates to
 // apply_pair_penalties)
 double apply_two_note_rules(const std::vector<NoteInfo>& notes, size_t i,
-                            const config::DistanceMatrix& distances,
-                            const config::RuleWeights& weights,
-                            domain::Hand hand) {
+                            const EvaluationContext& ctx) {
   if (i + 1 >= notes.size()) {
     return 0.0;
   }
 
   const NoteInfo* prev_note = (i > 0) ? &notes[i - 1] : nullptr;
-  return apply_pair_penalties(notes[i], notes[i + 1], prev_note, distances,
-                              weights, hand);
+  return apply_pair_penalties(notes[i], notes[i + 1], prev_note, ctx);
 }
 
 // Apply three-note rules on a triplet of consecutive notes
@@ -298,6 +303,8 @@ double ScoreEvaluator::evaluate(
   const auto& measures =
       (hand == domain::Hand::kLeft) ? piece.left_hand() : piece.right_hand();
 
+  EvaluationContext ctx{distances, weights, hand};
+
   auto notes = collect_notes(measures, fingerings);
 
   double total_penalty = 0.0;
@@ -308,14 +315,14 @@ double ScoreEvaluator::evaluate(
   // Apply sequential rules only if we have multiple notes
   if (notes.size() > 1) {
     for (size_t i = 0; i < notes.size(); ++i) {
-      total_penalty += apply_two_note_rules(notes, i, distances, weights, hand);
-      total_penalty += apply_three_note_rules(notes, i, distances);
+      total_penalty += apply_two_note_rules(notes, i, ctx);
+      total_penalty += apply_three_note_rules(notes, i, ctx.distances);
     }
   }
 
   // Always apply chord penalties (independent of sequential notes)
   total_penalty +=
-      apply_chord_penalties(measures, fingerings, distances, weights);
+      apply_chord_penalties(measures, fingerings, ctx.distances, ctx.weights);
 
   // Cache for delta evaluation
   if (!cache_) {
@@ -380,20 +387,17 @@ std::optional<NoteInfo> get_note_at_location(
 void apply_sequential_penalties_for_delta(
     size_t idx, const NoteInfo& old_changed, const NoteInfo& new_changed,
     const std::vector<NoteInfo>& old_notes,
-    const std::vector<NoteInfo>& new_notes,
-    const config::DistanceMatrix& distances, const config::RuleWeights& weights,
-    domain::Hand hand, double& old_penalty, double& new_penalty) {
+    const std::vector<NoteInfo>& new_notes, const EvaluationContext& ctx,
+    double& old_penalty, double& new_penalty) {
   // Two-note rules: [prev, changed]
   if (idx > 0) {
     const NoteInfo* prev_prev_old = (idx >= 2) ? &old_notes[idx - 2] : nullptr;
     const NoteInfo* prev_prev_new = (idx >= 2) ? &new_notes[idx - 2] : nullptr;
 
-    old_penalty +=
-        apply_pair_penalties(old_notes[idx - 1], old_changed, prev_prev_old,
-                             distances, weights, hand);
-    new_penalty +=
-        apply_pair_penalties(new_notes[idx - 1], new_changed, prev_prev_new,
-                             distances, weights, hand);
+    old_penalty += apply_pair_penalties(old_notes[idx - 1], old_changed,
+                                        prev_prev_old, ctx);
+    new_penalty += apply_pair_penalties(new_notes[idx - 1], new_changed,
+                                        prev_prev_new, ctx);
   }
 
   // Two-note rules: [changed, next]
@@ -401,34 +405,34 @@ void apply_sequential_penalties_for_delta(
     const NoteInfo* prev_old = (idx > 0) ? &old_notes[idx - 1] : nullptr;
     const NoteInfo* prev_new = (idx > 0) ? &new_notes[idx - 1] : nullptr;
 
-    old_penalty += apply_pair_penalties(old_changed, old_notes[idx + 1],
-                                        prev_old, distances, weights, hand);
-    new_penalty += apply_pair_penalties(new_changed, new_notes[idx + 1],
-                                        prev_new, distances, weights, hand);
+    old_penalty +=
+        apply_pair_penalties(old_changed, old_notes[idx + 1], prev_old, ctx);
+    new_penalty +=
+        apply_pair_penalties(new_changed, new_notes[idx + 1], prev_new, ctx);
   }
 
   // Triplet [prev, changed, next]
   if (idx > 0 && idx + 1 < old_notes.size() && idx + 1 < new_notes.size()) {
     old_penalty += apply_triplet_penalties(old_notes[idx - 1], old_changed,
-                                           old_notes[idx + 1], distances);
+                                           old_notes[idx + 1], ctx.distances);
     new_penalty += apply_triplet_penalties(new_notes[idx - 1], new_changed,
-                                           new_notes[idx + 1], distances);
+                                           new_notes[idx + 1], ctx.distances);
   }
 
   // Triplet [changed, next, next+1]
   if (idx + 2 < old_notes.size() && idx + 2 < new_notes.size()) {
     old_penalty += apply_triplet_penalties(old_changed, old_notes[idx + 1],
-                                           old_notes[idx + 2], distances);
+                                           old_notes[idx + 2], ctx.distances);
     new_penalty += apply_triplet_penalties(new_changed, new_notes[idx + 1],
-                                           new_notes[idx + 2], distances);
+                                           new_notes[idx + 2], ctx.distances);
   }
 
   // Triplet [prev-1, prev, changed]
   if (idx >= 2) {
     old_penalty += apply_triplet_penalties(
-        old_notes[idx - 2], old_notes[idx - 1], old_changed, distances);
+        old_notes[idx - 2], old_notes[idx - 1], old_changed, ctx.distances);
     new_penalty += apply_triplet_penalties(
-        new_notes[idx - 2], new_notes[idx - 1], new_changed, distances);
+        new_notes[idx - 2], new_notes[idx - 1], new_changed, ctx.distances);
   }
 }
 
@@ -474,6 +478,8 @@ double ScoreEvaluator::evaluate_delta(
   const auto& weights = config_->weights;
   const auto& measures =
       (hand == domain::Hand::kLeft) ? piece.left_hand() : piece.right_hand();
+
+  EvaluationContext ctx{distances, weights, hand};
 
   // Get the changed note info - O(1) access to slice
   auto old_changed_opt =
@@ -527,15 +533,15 @@ double ScoreEvaluator::evaluate_delta(
   // slice (i.e., if note_idx_in_slice == 0). Otherwise, it's an internal chord
   // note and sequential rules don't apply to it.
   if (changed_location.note_idx_in_slice == 0) {
-    apply_sequential_penalties_for_delta(
-        idx, old_changed, new_changed, old_notes, new_notes, distances, weights,
-        hand, old_penalty, new_penalty);
+    apply_sequential_penalties_for_delta(idx, old_changed, new_changed,
+                                         old_notes, new_notes, ctx, old_penalty,
+                                         new_penalty);
   }
 
   // Chord rules (Rule 14): if changed slice is a chord
-  apply_chord_penalties_for_delta(changed_location, measures,
-                                  current_fingerings, proposed_fingerings,
-                                  distances, weights, old_penalty, new_penalty);
+  apply_chord_penalties_for_delta(
+      changed_location, measures, current_fingerings, proposed_fingerings,
+      ctx.distances, ctx.weights, old_penalty, new_penalty);
 
   delta = new_penalty - old_penalty;
   return delta;
