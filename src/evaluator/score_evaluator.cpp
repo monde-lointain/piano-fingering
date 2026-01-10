@@ -40,8 +40,10 @@ namespace {
 // Evaluation context grouping related parameters
 struct EvaluationContext {
   // References intentional for short-lived aggregation
-  const config::DistanceMatrix& distances;  // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
-  const config::RuleWeights& weights;  // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
+  const config::DistanceMatrix&
+      distances;  // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
+  const config::RuleWeights&
+      weights;  // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
   domain::Hand hand;
 };
 
@@ -263,18 +265,19 @@ double apply_triplet_penalties(const NoteInfo& n1, const NoteInfo& n2,
                                const config::DistanceMatrix& distances) {
   double penalty = 0.0;
 
+  TripletContext triplet{n1.pitch,  n2.pitch,  n3.pitch,
+                         n1.finger, n2.finger, n3.finger};
+
   const auto& pair_distances =
       distances.get_pair(finger_pair_from(n1.finger, n2.finger));
-  penalty += apply_rule_3(pair_distances, n1.pitch, n2.pitch, n3.pitch,
-                          n1.finger, n2.finger, n3.finger);
+  penalty += apply_rule_3(pair_distances, triplet);
 
   int span = n3.pitch - n1.pitch;
   const auto& span_distances =
       distances.get_pair(finger_pair_from(n1.finger, n3.finger));
   penalty += apply_rule_4(span_distances, span);
 
-  penalty += apply_rule_12(n1.pitch, n2.pitch, n3.pitch, n1.finger, n2.finger,
-                           n3.finger);
+  penalty += apply_rule_12(triplet);
 
   penalty += apply_rule_15(n1.finger, n2.finger, n1.pitch, n2.pitch);
 

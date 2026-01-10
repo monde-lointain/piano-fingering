@@ -166,10 +166,10 @@ bool is_monotonic(int p1, int p2, int p3) {
   return (p1 < p2 && p2 < p3) || (p1 > p2 && p2 > p3);
 }
 
-double apply_rule_3(const config::FingerPairDistances& d, int p1, int p2,
-                    int p3, Finger f1, Finger f2, Finger f3) {
+double apply_rule_3(const config::FingerPairDistances& d,
+                    const TripletContext& triplet) {
   double penalty = 0.0;
-  int span = p3 - p1;  // Signed distance (can be negative)
+  int span = triplet.p3 - triplet.p1;  // Signed distance (can be negative)
 
   // 1. Base penalty: span outside comfort range
   bool outside_comfort = (span < d.min_comf || span > d.max_comf);
@@ -179,12 +179,13 @@ double apply_rule_3(const config::FingerPairDistances& d, int p1, int p2,
 
   // 2. Full change penalty: monotonic + thumb pivot + outside practical
   bool outside_practical = (span < d.min_prac || span > d.max_prac);
-  if (is_monotonic(p1, p2, p3) && f2 == Finger::kThumb && outside_practical) {
+  if (is_monotonic(triplet.p1, triplet.p2, triplet.p3) &&
+      triplet.f2 == Finger::kThumb && outside_practical) {
     penalty += 1.0;
   }
 
   // 3. Substitution penalty: same pitch, different finger
-  if (p1 == p3 && f1 != f3) {
+  if (triplet.p1 == triplet.p3 && triplet.f1 != triplet.f3) {
     penalty += 1.0;
   }
 
@@ -201,13 +202,12 @@ double apply_rule_4(const config::FingerPairDistances& d, int span) {
   return 0.0;
 }
 
-double apply_rule_12(int p1, int p2, int p3, Finger f1,
-                     [[maybe_unused]] Finger f2, Finger f3) {
+double apply_rule_12(const TripletContext& triplet) {
   // Different first and third note, played by same finger, second pitch is
   // middle
-  bool different_pitches = (p1 != p3);
-  bool same_outer_finger = (f1 == f3);
-  bool monotonic = is_monotonic(p1, p2, p3);
+  bool different_pitches = (triplet.p1 != triplet.p3);
+  bool same_outer_finger = (triplet.f1 == triplet.f3);
+  bool monotonic = is_monotonic(triplet.p1, triplet.p2, triplet.p3);
   return (different_pitches && same_outer_finger && monotonic) ? 1.0 : 0.0;
 }
 
