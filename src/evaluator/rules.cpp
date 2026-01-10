@@ -39,17 +39,18 @@ FingerPair finger_pair_from(Finger f1, Finger f2) {
 
 double apply_cascading_penalty(const config::FingerPairDistances& distances,
                                int actual_distance,
-                               const config::RuleWeights& weights) {
+                               const config::RuleWeights& weights,
+                               double multiplier) {
   double penalty = 0.0;
 
   // Nested cascading structure: relaxed -> comfort -> practical
   if (actual_distance < distances.min_rel) {
     // Rule 2: relaxed minimum violation
-    penalty += (distances.min_rel - actual_distance) *
+    penalty += (distances.min_rel - actual_distance) * multiplier *
                weights[config::RuleIndex::kRelaxedDistance];
     if (actual_distance < distances.min_comf) {
       // Rule 1: comfort minimum violation (only if relaxed violated)
-      penalty += (distances.min_comf - actual_distance) *
+      penalty += (distances.min_comf - actual_distance) * multiplier *
                  weights[config::RuleIndex::kComfortDistance];
       if (actual_distance < distances.min_prac) {
         // Rule 13: practical minimum violation (only if comfort violated)
@@ -59,11 +60,11 @@ double apply_cascading_penalty(const config::FingerPairDistances& distances,
     }
   } else if (actual_distance > distances.max_rel) {
     // Rule 2: relaxed maximum violation
-    penalty += (actual_distance - distances.max_rel) *
+    penalty += (actual_distance - distances.max_rel) * multiplier *
                weights[config::RuleIndex::kRelaxedDistance];
     if (actual_distance > distances.max_comf) {
       // Rule 1: comfort maximum violation (only if relaxed violated)
-      penalty += (actual_distance - distances.max_comf) *
+      penalty += (actual_distance - distances.max_comf) * multiplier *
                  weights[config::RuleIndex::kComfortDistance];
       if (actual_distance > distances.max_prac) {
         // Rule 13: practical maximum violation (only if comfort violated)
@@ -79,42 +80,10 @@ double apply_cascading_penalty(const config::FingerPairDistances& distances,
 double apply_chord_penalty(const config::FingerPairDistances& distances,
                            int actual_distance,
                            const config::RuleWeights& weights) {
-  double penalty = 0.0;
-
-  // Nested cascading structure: relaxed -> comfort -> practical
-  if (actual_distance < distances.min_rel) {
-    // Rule 2: relaxed minimum violation (doubled for chords)
-    penalty += (distances.min_rel - actual_distance) * 2.0 *
-               weights[config::RuleIndex::kRelaxedDistance];
-    if (actual_distance < distances.min_comf) {
-      // Rule 1: comfort minimum violation (doubled, only if relaxed violated)
-      penalty += (distances.min_comf - actual_distance) * 2.0 *
-                 weights[config::RuleIndex::kComfortDistance];
-      if (actual_distance < distances.min_prac) {
-        // Rule 13: practical minimum violation (NOT doubled, only if comfort
-        // violated)
-        penalty += (distances.min_prac - actual_distance) *
-                   weights[config::RuleIndex::kPracticalDistance];
-      }
-    }
-  } else if (actual_distance > distances.max_rel) {
-    // Rule 2: relaxed maximum violation (doubled for chords)
-    penalty += (actual_distance - distances.max_rel) * 2.0 *
-               weights[config::RuleIndex::kRelaxedDistance];
-    if (actual_distance > distances.max_comf) {
-      // Rule 1: comfort maximum violation (doubled, only if relaxed violated)
-      penalty += (actual_distance - distances.max_comf) * 2.0 *
-                 weights[config::RuleIndex::kComfortDistance];
-      if (actual_distance > distances.max_prac) {
-        // Rule 13: practical maximum violation (NOT doubled, only if comfort
-        // violated)
-        penalty += (actual_distance - distances.max_prac) *
-                   weights[config::RuleIndex::kPracticalDistance];
-      }
-    }
-  }
-
-  return penalty;
+  // Chord context doubles penalties for Rules 1 and 2 (not Rule 13)
+  static constexpr double kChordMultiplier = 2.0;
+  return apply_cascading_penalty(distances, actual_distance, weights,
+                                 kChordMultiplier);
 }
 
 double apply_rule_5(Finger f) { return (f == Finger::kRing) ? 1.0 : 0.0; }

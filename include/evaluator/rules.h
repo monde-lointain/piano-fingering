@@ -16,7 +16,7 @@ namespace piano_fingering::evaluator {
 
 [[nodiscard]] double apply_cascading_penalty(
     const config::FingerPairDistances& distances, int actual_distance,
-    const config::RuleWeights& weights);
+    const config::RuleWeights& weights, double multiplier = 1.0);
 
 [[nodiscard]] double apply_chord_penalty(
     const config::FingerPairDistances& distances, int actual_distance,
