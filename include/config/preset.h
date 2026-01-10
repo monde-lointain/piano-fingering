@@ -27,6 +27,14 @@ struct Preset {
 [[nodiscard]] const Preset& get_medium_preset();
 [[nodiscard]] const Preset& get_large_preset();
 
+// Preset factory functions for right hand matrices
+[[nodiscard]] DistanceMatrix make_small_right_hand();
+[[nodiscard]] DistanceMatrix make_medium_right_hand();
+[[nodiscard]] DistanceMatrix make_large_right_hand();
+
+// Mirror right hand matrix to left hand
+[[nodiscard]] DistanceMatrix mirror_to_left_hand(const DistanceMatrix& right);
+
 }  // namespace piano_fingering::config
 
 #endif  // PIANO_FINGERING_CONFIG_PRESET_H_

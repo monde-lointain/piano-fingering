@@ -1,7 +1,6 @@
 #include "config/preset.h"
 
 namespace piano_fingering::config {
-namespace {
 
 // Mirror right hand to create left hand by swapping and negating min/max
 DistanceMatrix mirror_to_left_hand(const DistanceMatrix& right) {
@@ -77,8 +76,6 @@ DistanceMatrix make_large_right_hand() {
   m.finger_pairs[9] = {1, 1, 1, 2, 4, 6};       // 4-5
   return m;
 }
-
-}  // namespace
 
 const Preset& get_small_preset() {
   static const Preset kPreset{
