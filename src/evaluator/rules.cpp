@@ -45,24 +45,30 @@ double apply_cascading_penalty(const config::FingerPairDistances& distances,
   // Nested cascading structure: relaxed -> comfort -> practical
   if (actual_distance < distances.min_rel) {
     // Rule 2: relaxed minimum violation
-    penalty += (distances.min_rel - actual_distance) * weights.values[1];
+    penalty += (distances.min_rel - actual_distance) *
+               weights[config::RuleIndex::kRelaxedDistance];
     if (actual_distance < distances.min_comf) {
       // Rule 1: comfort minimum violation (only if relaxed violated)
-      penalty += (distances.min_comf - actual_distance) * weights.values[0];
+      penalty += (distances.min_comf - actual_distance) *
+                 weights[config::RuleIndex::kComfortDistance];
       if (actual_distance < distances.min_prac) {
         // Rule 13: practical minimum violation (only if comfort violated)
-        penalty += (distances.min_prac - actual_distance) * weights.values[12];
+        penalty += (distances.min_prac - actual_distance) *
+                   weights[config::RuleIndex::kPracticalDistance];
       }
     }
   } else if (actual_distance > distances.max_rel) {
     // Rule 2: relaxed maximum violation
-    penalty += (actual_distance - distances.max_rel) * weights.values[1];
+    penalty += (actual_distance - distances.max_rel) *
+               weights[config::RuleIndex::kRelaxedDistance];
     if (actual_distance > distances.max_comf) {
       // Rule 1: comfort maximum violation (only if relaxed violated)
-      penalty += (actual_distance - distances.max_comf) * weights.values[0];
+      penalty += (actual_distance - distances.max_comf) *
+                 weights[config::RuleIndex::kComfortDistance];
       if (actual_distance > distances.max_prac) {
         // Rule 13: practical maximum violation (only if comfort violated)
-        penalty += (actual_distance - distances.max_prac) * weights.values[12];
+        penalty += (actual_distance - distances.max_prac) *
+                   weights[config::RuleIndex::kPracticalDistance];
       }
     }
   }
@@ -78,28 +84,32 @@ double apply_chord_penalty(const config::FingerPairDistances& distances,
   // Nested cascading structure: relaxed -> comfort -> practical
   if (actual_distance < distances.min_rel) {
     // Rule 2: relaxed minimum violation (doubled for chords)
-    penalty += (distances.min_rel - actual_distance) * 2.0 * weights.values[1];
+    penalty += (distances.min_rel - actual_distance) * 2.0 *
+               weights[config::RuleIndex::kRelaxedDistance];
     if (actual_distance < distances.min_comf) {
       // Rule 1: comfort minimum violation (doubled, only if relaxed violated)
-      penalty +=
-          (distances.min_comf - actual_distance) * 2.0 * weights.values[0];
+      penalty += (distances.min_comf - actual_distance) * 2.0 *
+                 weights[config::RuleIndex::kComfortDistance];
       if (actual_distance < distances.min_prac) {
         // Rule 13: practical minimum violation (NOT doubled, only if comfort
         // violated)
-        penalty += (distances.min_prac - actual_distance) * weights.values[12];
+        penalty += (distances.min_prac - actual_distance) *
+                   weights[config::RuleIndex::kPracticalDistance];
       }
     }
   } else if (actual_distance > distances.max_rel) {
     // Rule 2: relaxed maximum violation (doubled for chords)
-    penalty += (actual_distance - distances.max_rel) * 2.0 * weights.values[1];
+    penalty += (actual_distance - distances.max_rel) * 2.0 *
+               weights[config::RuleIndex::kRelaxedDistance];
     if (actual_distance > distances.max_comf) {
       // Rule 1: comfort maximum violation (doubled, only if relaxed violated)
-      penalty +=
-          (actual_distance - distances.max_comf) * 2.0 * weights.values[0];
+      penalty += (actual_distance - distances.max_comf) * 2.0 *
+                 weights[config::RuleIndex::kComfortDistance];
       if (actual_distance > distances.max_prac) {
         // Rule 13: practical maximum violation (NOT doubled, only if comfort
         // violated)
-        penalty += (actual_distance - distances.max_prac) * weights.values[12];
+        penalty += (actual_distance - distances.max_prac) *
+                   weights[config::RuleIndex::kPracticalDistance];
       }
     }
   }
