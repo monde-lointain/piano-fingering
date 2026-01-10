@@ -21,8 +21,8 @@ This module defines the **ubiquitous language** of the domain - all other module
 | Entity | Owned Data | Invariants |
 |--------|-----------|-----------|
 | `Pitch` | Modified keyboard distance (0-13 per octave) | Immutable, validated on construction |
-| `Finger` | Finger number (1-5) | 1=Thumb, 5=Pinky |
-| `Hand` | Enumeration (LEFT, RIGHT) | Binary choice |
+| `Finger` | Finger number (1-5) | kThumb=1, kIndex=2, kMiddle=3, kRing=4, kPinky=5 |
+| `Hand` | Enumeration (kLeft, kRight) | Binary choice |
 | `Note` | `{Pitch pitch, int octave, int duration, bool is_rest, int staff, int voice}` | Duration > 0, staff ∈ {1,2}, voice ∈ {1,2,3,4} |
 | `Slice` | `std::vector<Note> notes` | Max 5 notes per hand |
 | `Measure` | `std::vector<Slice> slices, int number, TimeSig time_sig` | At least 1 slice |
@@ -48,6 +48,16 @@ This is a **leaf module** - it has no outgoing dependencies.
 
 **API Surface:**
 ```cpp
+// Enums (Google style: kPascalCase)
+enum class Hand : uint8_t { kLeft, kRight };
+enum class Finger : uint8_t { kThumb = 1, kIndex = 2, kMiddle = 3, kRing = 4, kPinky = 5 };
+
+// Enum utilities
+[[nodiscard]] constexpr Hand opposite(Hand hand) noexcept;
+[[nodiscard]] constexpr int to_int(Finger finger) noexcept;
+[[nodiscard]] inline Finger finger_from_int(int value);
+[[nodiscard]] constexpr std::array<Finger, 5> all_fingers() noexcept;
+
 // Construction (immutable after creation)
 Pitch::Pitch(int value);  // throws if value not in [0, 13]
 Note::Note(Pitch p, int octave, uint32_t duration, bool is_rest, int staff, int voice);
@@ -56,14 +66,23 @@ Measure::Measure(int number, std::initializer_list<Slice> slices, TimeSignature 
 Piece::Piece(Metadata meta, std::initializer_list<Measure> left, std::initializer_list<Measure> right);
 
 // Accessors (all const)
+int Pitch::value() const noexcept;
 Pitch Note::pitch() const noexcept;
 int Note::octave() const noexcept;
+int Note::absolute_pitch() const noexcept;  // Computed octave*14 + pitch.value()
 size_t Slice::size() const noexcept;
+bool Slice::empty() const noexcept;
+const Note& Slice::operator[](size_t index) const;
+auto Slice::begin() const noexcept;
+auto Slice::end() const noexcept;
 const std::vector<Measure>& Piece::left_hand() const noexcept;
+const std::vector<Measure>& Piece::right_hand() const noexcept;
+size_t Piece::total_measures() const noexcept;
+bool Piece::empty() const noexcept;
 
 // Utilities
 int Pitch::distance_to(Pitch other) const noexcept;  // Keyboard distance
-bool Pitch::is_black_key() const noexcept;  // {1,3,7,9,11}
+bool Pitch::is_black_key() const noexcept;  // {1,3,7,9,11} mod 14
 ```
 
 ---
@@ -158,8 +177,8 @@ TEST(SliceTest, MaxNotesEnforced) {
 
 ```
 include/domain/
-  hand.h            // Hand enum (LEFT, RIGHT)
-  finger.h          // Finger enum (1-5)
+  hand.h            // Hand enum (kLeft, kRight)
+  finger.h          // Finger enum (kThumb=1...kPinky=5)
   pitch.h           // Pitch value type (0-13 per octave)
   note.h            // Note value type (pitch + octave + duration + metadata)
   slice.h           // Slice container (max 5 simultaneous notes)
@@ -167,7 +186,7 @@ include/domain/
   measure.h         // Measure container (slices + time signature)
   metadata.h        // Metadata (title, composer)
   piece.h           // Piece container (left/right hand measures)
-  fingering.h       // Fingering (optional finger assignments)
+  fingering.h       // Fingering (immutable finger assignments)
 ```
 
 ---
@@ -198,15 +217,20 @@ public:
   Fingering() = default;
   Fingering(std::initializer_list<std::optional<Finger>> assignments);
 
+  // Immutable accessors
   const std::optional<Finger>& operator[](size_t index) const;
   size_t size() const noexcept;
   bool empty() const noexcept;
+  auto begin() const noexcept;
+  auto end() const noexcept;
 
   // Validation
   bool is_complete() const;  // All notes have assignments
   bool violates_hard_constraint(const Slice& slice) const;  // Check for duplicate fingers in same slice
 };
 ```
+
+**Note**: Fingering is fully immutable after construction (no `assign()` mutator). Modifications require creating new instances.
 
 ---
 

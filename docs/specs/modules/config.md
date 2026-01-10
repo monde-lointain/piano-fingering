@@ -19,21 +19,49 @@ Stores comfortable/practical finger-pair distances:
 | Field | Type | Description |
 |-------|------|-------------|
 | `finger_pairs` | `std::array<FingerPairDistances, 10>` | Indexed by pair (1-2, 1-3, ..., 4-5) |
-| `FingerPairDistances` | `{MinPrac, MinComf, MinRel, MaxRel, MaxComf, MaxPrac}` | All `int` values |
+| `FingerPairDistances` | `{min_prac, min_comf, min_rel, max_rel, max_comf, max_prac}` | All `int` values |
+
+**Structures:**
+```cpp
+enum class FingerPair {
+  kThumbIndex = 0, kThumbMiddle, kThumbRing, kThumbPinky,
+  kIndexMiddle, kIndexRing, kIndexPinky,
+  kMiddleRing, kMiddlePinky,
+  kRingPinky
+};
+inline constexpr std::size_t kFingerPairCount = 10;
+
+inline constexpr int kMinDistanceValue = -20;
+inline constexpr int kMaxDistanceValue = 20;
+
+struct FingerPairDistances {
+  int min_prac, min_comf, min_rel, max_rel, max_comf, max_prac;
+  [[nodiscard]] constexpr bool is_valid() const noexcept;
+  [[nodiscard]] constexpr bool operator==(const FingerPairDistances&) const noexcept = default;
+};
+
+struct DistanceMatrix {
+  std::array<FingerPairDistances, kFingerPairCount> finger_pairs{};
+  [[nodiscard]] constexpr const FingerPairDistances& get_pair(FingerPair pair) const noexcept;
+  [[nodiscard]] constexpr FingerPairDistances& get_pair(FingerPair pair) noexcept;
+  [[nodiscard]] constexpr bool is_valid() const noexcept;
+  [[nodiscard]] constexpr bool operator==(const DistanceMatrix&) const noexcept = default;
+};
+```
 
 **Constraints:**
-- For each pair: `MinPrac ≤ MinComf ≤ MinRel < MaxRel ≤ MaxComf ≤ MaxPrac`
+- For each pair: `min_prac ≤ min_comf ≤ min_rel < max_rel ≤ max_comf ≤ max_prac`
 - All values in range `[-20, 20]` (keyboard units)
 
 **Example (Medium Right Hand, pair 1-2):**
 ```cpp
 FingerPairDistances pair_1_2 {
-  .MinPrac = -8,
-  .MinComf = -6,
-  .MinRel = 1,
-  .MaxRel = 5,
-  .MaxComf = 8,
-  .MaxPrac = 10
+  .min_prac = -8,
+  .min_comf = -6,
+  .min_rel = 1,
+  .max_rel = 5,
+  .max_comf = 8,
+  .max_prac = 10
 };
 ```
 
@@ -43,7 +71,19 @@ Penalty multipliers for 15 rules:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `weights` | `std::array<double, 15>` | Index 0 = Rule 1, ..., Index 14 = Rule 15 |
+| `values` | `std::array<double, 15>` | Index 0 = Rule 1, ..., Index 14 = Rule 15 |
+
+**Structure:**
+```cpp
+struct RuleWeights {
+  std::array<double, kRuleCount> values{};
+  [[nodiscard]] constexpr bool is_valid() const noexcept;
+  [[nodiscard]] static constexpr RuleWeights defaults() noexcept;
+  [[nodiscard]] constexpr bool operator==(const RuleWeights&) const noexcept = default;
+};
+
+inline constexpr std::size_t kRuleCount = 15;
+```
 
 **Constraints:**
 - All values ≥ 0.0
@@ -51,7 +91,7 @@ Penalty multipliers for 15 rules:
 
 **Default Weights:**
 ```cpp
-constexpr std::array<double, 15> DEFAULT_WEIGHTS = {
+constexpr std::array<double, 15> DEFAULT_WEIGHTS_VALUES = {
   2.0,   // Rule 1: Below MinComf or above MaxComf (additional)
   1.0,   // Rule 2: Below MinRel or above MaxRel (base)
   1.0,   // Rule 3: Hand position change (triplet)
@@ -72,21 +112,53 @@ constexpr std::array<double, 15> DEFAULT_WEIGHTS = {
 
 ### Algorithm Parameters
 
+```cpp
+struct AlgorithmParameters {
+  std::size_t beam_width = 100;
+  std::size_t ils_iterations = 1000;
+  std::size_t perturbation_strength = 3;
+  [[nodiscard]] constexpr bool is_valid() const noexcept;
+  [[nodiscard]] constexpr bool operator==(const AlgorithmParameters&) const noexcept = default;
+};
+```
+
 | Field | Type | Description | Default |
 |-------|------|-------------|---------|
 | `beam_width` | `size_t` | Max states kept per slice | 100 |
 | `ils_iterations` | `size_t` | ILS improvement iterations | 1000 (balanced) |
 | `perturbation_strength` | `size_t` | Notes modified per perturb | 3 |
 
+### Config Structure
+
+```cpp
+struct Config {
+  DistanceMatrix left_hand{};
+  DistanceMatrix right_hand{};
+  RuleWeights weights{};
+  AlgorithmParameters algorithm{};
+  [[nodiscard]] constexpr bool is_valid() const noexcept;
+  [[nodiscard]] constexpr bool operator==(const Config&) const noexcept = default;
+};
+```
+
 ### Preset Definition
 
 ```cpp
 struct Preset {
   std::string name;
-  DistanceMatrix left_hand;
-  DistanceMatrix right_hand;
-  RuleWeights weights;
+  DistanceMatrix left_hand{};
+  DistanceMatrix right_hand{};
+  RuleWeights weights{};
+  [[nodiscard]] Config to_config() const;
 };
+
+inline constexpr std::string_view kPresetSmall = "Small";
+inline constexpr std::string_view kPresetMedium = "Medium";
+inline constexpr std::string_view kPresetLarge = "Large";
+
+[[nodiscard]] const Preset& get_small_preset();
+[[nodiscard]] const Preset& get_medium_preset();
+[[nodiscard]] const Preset& get_large_preset();
 ```
 
 Three presets embedded as `constexpr`:
@@ -101,18 +173,26 @@ Three presets embedded as `constexpr`:
 ### Inbound API
 
 ```cpp
-// Primary loader
+// Primary loader (static methods only, no instances)
 class ConfigManager {
 public:
+  ConfigManager() = delete;  // Stateless class
+
   // Load preset by name
-  static Config load_preset(const std::string& name);  // "Small", "Medium", "Large"
+  [[nodiscard]] static Config load_preset(std::string_view name);
 
   // Load custom JSON with preset as base
-  static Config load_custom(const std::filesystem::path& json_path,
-                            const std::string& base_preset = "Medium");
+  [[nodiscard]] static Config load_custom(const std::filesystem::path& path,
+                                          std::string_view base_preset = "Medium");
 
   // Validate configuration
-  static bool validate(const Config& cfg, std::string& error_msg);
+  [[nodiscard]] static bool validate(const Config& config, std::string& error_message);
+};
+
+// Exception type
+class ConfigurationError : public std::runtime_error {
+public:
+  explicit ConfigurationError(const std::string& message);
 };
 ```
 
@@ -146,23 +226,24 @@ Depended upon by:
 #### 1. Constraint Validation
 ```cpp
 TEST(ConfigTest, DistanceMatrixConstraints) {
-  DistanceMatrix dm = PRESET_MEDIUM.right_hand;
-  for (auto [pair, distances] : dm.finger_pairs) {
-    EXPECT_LT(distances.MinPrac, distances.MinComf);
-    EXPECT_LT(distances.MinComf, distances.MinRel);
-    EXPECT_LT(distances.MinRel, distances.MaxRel);
-    EXPECT_LT(distances.MaxRel, distances.MaxComf);
-    EXPECT_LT(distances.MaxComf, distances.MaxPrac);
+  const Preset& medium = get_medium_preset();
+  DistanceMatrix dm = medium.right_hand;
+  for (const auto& distances : dm.finger_pairs) {
+    EXPECT_LT(distances.min_prac, distances.min_comf);
+    EXPECT_LT(distances.min_comf, distances.min_rel);
+    EXPECT_LT(distances.min_rel, distances.max_rel);
+    EXPECT_LT(distances.max_rel, distances.max_comf);
+    EXPECT_LT(distances.max_comf, distances.max_prac);
   }
 }
 
 TEST(ConfigTest, InvalidMatrixRejected) {
   DistanceMatrix invalid;
-  invalid.set_pair(FingerPair::THUMB_INDEX,
-                   {.MinPrac = 10, .MinComf = 5, /* ... */});  // Inverted!
+  invalid.get_pair(FingerPair::kThumbIndex) =
+      {.min_prac = 10, .min_comf = 5, /* ... */};  // Inverted!
   std::string error;
-  EXPECT_FALSE(ConfigManager::validate(Config{invalid, {}, {}}, error));
-  EXPECT_THAT(error, HasSubstr("MinPrac must be < MinComf"));
+  EXPECT_FALSE(ConfigManager::validate(Config{invalid, {}, {}, {}}, error));
+  EXPECT_THAT(error, HasSubstr("min_prac must be < min_comf"));
 }
 ```
 
@@ -192,14 +273,14 @@ TEST(ConfigTest, PartialJSONOverlay) {
   Config cfg = ConfigManager::load_custom("partial.json", "Medium");
 
   // Check override applied
-  EXPECT_EQ(cfg.right_hand.get_pair(FingerPair::THUMB_INDEX).MinPrac, -10);
+  EXPECT_EQ(cfg.right_hand.get_pair(FingerPair::kThumbIndex).min_prac, -10);
 
   // Check default preserved
-  EXPECT_EQ(cfg.right_hand.get_pair(FingerPair::INDEX_MIDDLE).MinPrac, 1);
+  EXPECT_EQ(cfg.right_hand.get_pair(FingerPair::kIndexMiddle).min_prac, 1);
 
   // Check rule weight override
-  EXPECT_DOUBLE_EQ(cfg.weights[0], 2.5);
-  EXPECT_DOUBLE_EQ(cfg.weights[1], 1.0);  // Default
+  EXPECT_DOUBLE_EQ(cfg.weights.values[0], 2.5);
+  EXPECT_DOUBLE_EQ(cfg.weights.values[1], 1.0);  // Default
 }
 ```
 
@@ -207,7 +288,7 @@ TEST(ConfigTest, PartialJSONOverlay) {
 ```cpp
 TEST(ConfigTest, MissingFieldsUsesDefaults) {
   Config cfg = ConfigManager::load_custom("empty.json", "Large");
-  EXPECT_EQ(cfg.right_hand, PRESET_LARGE.right_hand);  // No overrides
+  EXPECT_EQ(cfg.right_hand, get_large_preset().right_hand);  // No overrides
 }
 ```
 
@@ -245,13 +326,18 @@ TEST(ConfigTest, MalformedJSONThrows) {
 
 ```
 include/config/
-  distance_matrix.h       // DistanceMatrix struct + accessors
-  rule_weights.h          // RuleWeights typedef
-  preset.h                // Preset struct + embedded constants
-  config_manager.h        // Loading and validation logic
+  finger_pair.h              // FingerPair enum
+  finger_pair_distances.h    // FingerPairDistances struct + constants
+  distance_matrix.h          // DistanceMatrix struct + accessors
+  rule_weights.h             // RuleWeights struct
+  algorithm_parameters.h     // AlgorithmParameters struct
+  config.h                   // Config struct
+  configuration_error.h      // ConfigurationError exception
+  preset.h                   // Preset struct + accessor functions
+  config_manager.h           // Loading and validation logic
 src/config/
-  config_manager.cpp      // JSON parsing implementation
-  embedded_presets.cpp    // PRESET_SMALL/MEDIUM/LARGE definitions
+  config_manager.cpp         // JSON parsing implementation
+  embedded_presets.cpp       // Preset definitions (get_*_preset functions)
 ```
 
 ---

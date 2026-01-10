@@ -47,44 +47,89 @@ public:
     size_t fingering_idx;
   };
 
-  explicit ScoreEvaluator(const Config& cfg);
-
-  ~ScoreEvaluator();  // Needed for unique_ptr<CacheData>
+  explicit ScoreEvaluator(const config::Config& config) noexcept;
+  ~ScoreEvaluator();
 
   // Move-only for PIMPL pattern
+  ScoreEvaluator(const ScoreEvaluator&) = delete;
+  ScoreEvaluator& operator=(const ScoreEvaluator&) = delete;
   ScoreEvaluator(ScoreEvaluator&&) noexcept;
   ScoreEvaluator& operator=(ScoreEvaluator&&) noexcept;
 
   // Full evaluation (used in Beam Search initial pass)
   // Also populates internal cache for efficient delta evaluation
-  double evaluate(
-    const Piece& piece,
-    const std::vector<Fingering>& fingerings,
-    Hand hand
-  ) const;
+  [[nodiscard]] double evaluate(
+      const domain::Piece& piece,
+      const std::vector<domain::Fingering>& fingerings,
+      domain::Hand hand) const;
 
   // Delta evaluation (used in ILS for incremental updates)
   // Reuses cached note vectors from prior evaluate() call for O(S) amortized performance
-  double evaluate_delta(
-    const Piece& piece,
-    const std::vector<Fingering>& current_fingerings,
-    const std::vector<Fingering>& proposed_fingerings,
-    const SliceLocation& changed_location,
-    Hand hand
-  ) const;
+  [[nodiscard]] double evaluate_delta(
+      const domain::Piece& piece,
+      const std::vector<domain::Fingering>& current_fingerings,
+      const std::vector<domain::Fingering>& proposed_fingerings,
+      const SliceLocation& changed_location,
+      domain::Hand hand) const;
 
 private:
-  const Config* config_;
-
+  const config::Config* config_;
   struct CacheData;  // PIMPL - stores note vectors for delta evaluation
   mutable std::unique_ptr<CacheData> cache_;
 };
 ```
 
+### Rule Functions (Free Functions in rules.h)
+
+Individual rule implementations are **free functions**, not class methods:
+
+```cpp
+namespace piano_fingering::evaluator {
+
+// Finger pair utilities
+[[nodiscard]] config::FingerPair finger_pair_from(domain::Finger f1, domain::Finger f2);
+
+// Cascading distance penalties (Rules 1, 2, 13)
+[[nodiscard]] double apply_cascading_penalty(
+    const config::FingerPairDistances& distances, int actual_distance,
+    const config::RuleWeights& weights);
+
+// Chord-specific cascading (Rule 14)
+[[nodiscard]] double apply_chord_penalty(
+    const config::FingerPairDistances& distances, int actual_distance,
+    const config::RuleWeights& weights);
+
+// Individual rule functions
+[[nodiscard]] double apply_rule_5(domain::Finger f);
+[[nodiscard]] double apply_rule_6(domain::Finger f1, domain::Finger f2);
+[[nodiscard]] double apply_rule_7(domain::Finger f1, bool is_black1,
+                                  domain::Finger f2, bool is_black2);
+[[nodiscard]] double apply_rule_8(domain::Finger f, bool is_black,
+                                  std::optional<bool> prev_is_black,
+                                  std::optional<bool> next_is_black);
+[[nodiscard]] double apply_rule_9(domain::Finger f, bool is_black, bool adj_is_black);
+[[nodiscard]] bool is_crossing(domain::Finger f1, int pitch1,
+                               domain::Finger f2, int pitch2, domain::Hand hand);
+[[nodiscard]] double apply_rule_10(bool is_crossing, bool note1_black, bool note2_black);
+[[nodiscard]] double apply_rule_11(int lower_pitch, bool lower_black, domain::Finger lower_finger,
+                                   int higher_pitch, bool higher_black, domain::Finger higher_finger);
+[[nodiscard]] bool is_monotonic(int p1, int p2, int p3);
+[[nodiscard]] double apply_rule_3(const config::FingerPairDistances& d,
+                                  int p1, int p2, int p3,
+                                  domain::Finger f1, domain::Finger f2, domain::Finger f3);
+[[nodiscard]] double apply_rule_4(const config::FingerPairDistances& d, int span);
+[[nodiscard]] double apply_rule_12(int p1, int p2, int p3,
+                                   domain::Finger f1, domain::Finger f2, domain::Finger f3);
+[[nodiscard]] double apply_rule_15(domain::Finger f1, domain::Finger f2,
+                                   int pitch1, int pitch2);
+
+}  // namespace piano_fingering::evaluator
+```
+
 ### Outbound Dependencies
 
-- **Domain**: Reads `Piece`, `Slice`, `Note`, `Finger`
-- **Config**: Reads `DistanceMatrix`, `RuleWeights`
+- **Domain**: Reads `Piece`, `Slice`, `Note`, `Finger`, `Hand`
+- **Config**: Reads `Config`, `DistanceMatrix`, `RuleWeights`, `FingerPairDistances`, `FingerPair`
 
 ---
 
@@ -111,22 +156,23 @@ private:
 
 ```cpp
 TEST(EvaluatorTest, Rule1_ComfortViolation) {
-  Config cfg = Config::load_preset("Medium");
+  Config cfg = ConfigManager::load_preset("Medium");
   ScoreEvaluator eval(cfg);
 
-  // Create two notes with distance violating MaxComf for fingers 1-2
-  // MaxComf(1-2) = 8, so distance 10 violates by 2 units
+  // Create two notes with distance violating max_comf for fingers 1-2
+  // max_comf(1-2) = 8, so distance 10 violates by 2 units
   Note n1(Pitch(0), 4, 480, false, 1, 1);  // C4
   Note n2(Pitch(10), 4, 480, false, 1, 1); // A#4 (distance = 10)
 
-  Finger f1 = Finger::THUMB;
-  Finger f2 = Finger::INDEX;
+  // Rules are FREE FUNCTIONS in rules.h, not methods
+  const auto& distances = cfg.right_hand.get_pair(FingerPair::kThumbIndex);
+  double penalty = apply_cascading_penalty(distances, 10, cfg.weights);
 
-  // Rule 1: +2 per unit beyond MaxComf = 2 units * 2 = +4
-  // But cascading! Also triggers Rule 2 (+1) and possibly Rule 13
-  double penalty = eval.rule1_comfort_distance(n1, f1, n2, f2);
-
-  EXPECT_EQ(penalty, 2 * 2);  // 2 units * +2 penalty = 4 (Rule 1 only)
+  // Cascading: distance 10, max_rel=5, max_comf=8
+  // Rule 2: (10-5) * 1.0 = 5
+  // Rule 1: (10-8) * 2.0 = 4 (additional)
+  // Total: 9
+  EXPECT_EQ(penalty, 9);
 }
 ```
 
@@ -134,16 +180,14 @@ TEST(EvaluatorTest, Rule1_ComfortViolation) {
 
 ```cpp
 TEST(EvaluatorTest, Rule2_RelaxedViolation) {
-  Config cfg = Config::load_preset("Medium");
-  ScoreEvaluator eval(cfg);
+  Config cfg = ConfigManager::load_preset("Medium");
 
-  // MaxRel(1-2) = 5, distance 6 violates by 1 unit
-  Note n1(Pitch(0), 4, 480, false, 1, 1);  // C4
-  Note n2(Pitch(6), 4, 480, false, 1, 1);  // F#4 (distance = 6)
+  // max_rel(1-2) = 5, distance 6 violates by 1 unit
+  const auto& distances = cfg.right_hand.get_pair(FingerPair::kThumbIndex);
+  double penalty = apply_cascading_penalty(distances, 6, cfg.weights);
 
-  double penalty = eval.rule2_relaxed_distance(n1, Finger::THUMB, n2, Finger::INDEX);
-
-  EXPECT_EQ(penalty, 1);  // 1 unit * +1 penalty
+  // Rule 2 only: (6-5) * 1.0 = 1
+  EXPECT_EQ(penalty, 1);
 }
 ```
 
@@ -170,18 +214,12 @@ TEST(EvaluatorTest, Rule13_PracticalViolation) {
 
 ```cpp
 TEST(EvaluatorTest, Rule5_FourthFingerPenalty) {
-  Config cfg = Config::load_preset("Medium");
-  ScoreEvaluator eval(cfg);
-
-  Note n1(Pitch(0), 4, 480, false, 1, 1);
-  Note n2(Pitch(2), 4, 480, false, 1, 1);
-
-  Fingering f;
-  f.assign(0, Finger::RING);  // Finger 4 (ring finger)
-
-  // Rule 5: +1 per use of fourth finger
-  double penalty = eval.rule5_fourth_finger_usage(n1, Finger::RING);
+  // Rule 5: +1 per use of ring finger (fourth finger)
+  double penalty = apply_rule_5(Finger::kRing);
   EXPECT_EQ(penalty, 1.0);
+
+  // Other fingers have no penalty
+  EXPECT_EQ(apply_rule_5(Finger::kThumb), 0.0);
 }
 ```
 
@@ -189,14 +227,12 @@ TEST(EvaluatorTest, Rule5_FourthFingerPenalty) {
 
 ```cpp
 TEST(EvaluatorTest, Rule8_ThumbOnBlack) {
-  Config cfg = Config::load_preset("Medium");
-  ScoreEvaluator eval(cfg);
-
-  Note black_key(Pitch(1), 4, 480, false, 1, 1);  // C# (pitch 1 is black)
-
-  // Rule 8: +0.5 for thumb on black
-  double penalty = eval.rule8_thumb_on_black(black_key, Finger::THUMB, /* before */ std::nullopt, /* after */ std::nullopt);
+  // Rule 8: +0.5 base for thumb on black key
+  double penalty = apply_rule_8(Finger::kThumb, true, std::nullopt, std::nullopt);
   EXPECT_EQ(penalty, 0.5);
+
+  // Not thumb: no penalty
+  EXPECT_EQ(apply_rule_8(Finger::kIndex, true, std::nullopt, std::nullopt), 0.0);
 }
 ```
 
@@ -204,22 +240,17 @@ TEST(EvaluatorTest, Rule8_ThumbOnBlack) {
 
 ```cpp
 TEST(EvaluatorTest, Rule14_ChordDoublesRules1And2) {
-  Config cfg = Config::load_preset("Medium");
-  ScoreEvaluator eval(cfg);
+  Config cfg = ConfigManager::load_preset("Medium");
 
-  // Chord: C4 (thumb) + A#4 (index) - distance 10 violates MaxComf(1-2)=8 by 2 units
-  Slice chord({
-    Note(Pitch(0), 4, 480, false, 1, 1),
-    Note(Pitch(10), 4, 480, false, 1, 1)
-  });
+  // Chord: distance 10 violates max_comf(1-2)=8 by 2 units
+  const auto& distances = cfg.right_hand.get_pair(FingerPair::kThumbIndex);
 
-  Fingering f;
-  f.assign(0, Finger::THUMB);
-  f.assign(1, Finger::INDEX);
+  // Rule 14 uses apply_chord_penalty which DOUBLES cascading penalties
+  double penalty = apply_chord_penalty(distances, 10, cfg.weights);
 
-  // Within chord: Rule 1 penalty is DOUBLED: (2 units * 2 penalty) * 2 = 8
-  double penalty = eval.rule14_chord_constraints(chord, f);
-  EXPECT_EQ(penalty, 8);  // Doubled Rule 1 penalty
+  // Normal: Rule2=5, Rule1=4, total=9
+  // Doubled: 9 * 2 = 18
+  EXPECT_EQ(penalty, 18);
 }
 ```
 
@@ -227,18 +258,13 @@ TEST(EvaluatorTest, Rule14_ChordDoublesRules1And2) {
 
 ```cpp
 TEST(EvaluatorTest, Rule15_SamePitchDifferentFinger) {
-  Config cfg = Config::load_preset("Medium");
-  ScoreEvaluator eval(cfg);
-
-  Slice s1({Note(Pitch(0), 4, 480, false, 1, 1)});  // C4
-  Slice s2({Note(Pitch(0), 4, 480, false, 1, 1)});  // C4 again
-
-  Fingering f1, f2;
-  f1.assign(0, Finger::THUMB);
-  f2.assign(0, Finger::INDEX);  // Different finger for same pitch
-
-  double penalty = eval.rule15_same_pitch_different_finger(s1, s2, f1, f2);
+  // Rule 15: +1 for same pitch with different finger consecutively
+  int pitch = 60;  // C4 absolute pitch
+  double penalty = apply_rule_15(Finger::kThumb, Finger::kIndex, pitch, pitch);
   EXPECT_EQ(penalty, 1.0);
+
+  // Same finger, no penalty
+  EXPECT_EQ(apply_rule_15(Finger::kThumb, Finger::kThumb, pitch, pitch), 0.0);
 }
 ```
 
@@ -333,7 +359,10 @@ src/evaluator/
   rules.cpp                // Rule implementations (15 functions + cascading helpers)
 ```
 
-**Note:** Cascading logic is inline in rules.cpp, not separate file
+**Note:**
+- Rules are **free functions** in the `piano_fingering::evaluator` namespace, not class methods
+- Cascading logic (`apply_cascading_penalty`, `apply_chord_penalty`) is in rules.cpp
+- ScoreEvaluator orchestrates rule application and caching
 
 ---
 
@@ -355,26 +384,26 @@ double ScoreEvaluator::evaluate_distance_with_cascading(
   double penalty = 0.0;
 
   // Check from innermost to outermost threshold
-  if (distance < thresholds.MinRel || distance > thresholds.MaxRel) {
+  if (distance < thresholds.min_rel || distance > thresholds.max_rel) {
     int violation_units = std::max(
-      thresholds.MinRel - distance,
-      distance - thresholds.MaxRel
+      thresholds.min_rel - distance,
+      distance - thresholds.max_rel
     );
-    penalty += violation_units * config_.weights[1];  // Rule 2: +1/unit
+    penalty += violation_units * weights.values[1];  // Rule 2: +1/unit
 
-    if (distance < thresholds.MinComf || distance > thresholds.MaxComf) {
+    if (distance < thresholds.min_comf || distance > thresholds.max_comf) {
       int comfort_violation = std::max(
-        thresholds.MinComf - distance,
-        distance - thresholds.MaxComf
+        thresholds.min_comf - distance,
+        distance - thresholds.max_comf
       );
-      penalty += comfort_violation * config_.weights[0];  // Rule 1: +2/unit additional
+      penalty += comfort_violation * weights.values[0];  // Rule 1: +2/unit additional
 
-      if (distance < thresholds.MinPrac || distance > thresholds.MaxPrac) {
+      if (distance < thresholds.min_prac || distance > thresholds.max_prac) {
         int prac_violation = std::max(
-          thresholds.MinPrac - distance,
-          distance - thresholds.MaxPrac
+          thresholds.min_prac - distance,
+          distance - thresholds.max_prac
         );
-        penalty += prac_violation * config_.weights[12];  // Rule 13: +10/unit additional
+        penalty += prac_violation * weights.values[12];  // Rule 13: +10/unit additional
       }
     }
   }
